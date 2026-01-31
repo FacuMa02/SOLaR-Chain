@@ -5,6 +5,17 @@ node_modules
 /cache
 /artifacts
 
+# Ganache local database
+build/
+ganache-db/
+# Ganache GUI settings
+.ganache/
+# Ignorar base de datos de Blockchain Local (Ganache)
+blockchain_db/
+
+# Ignorar archivos de log
+*.log
+
 # TypeChain files
 /typechain
 /typechain-types
