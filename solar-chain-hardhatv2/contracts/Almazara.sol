@@ -10,6 +10,8 @@ contract Almazara {
 
     struct Lote {
         uint256 id;
+        string nroRemito;
+        uint256 kgIniciales;
         ProductionDSL.Etapa etapaActual;
         ProductionDSL.ResultadoValidacion estadoCalidad; // APROBADO, OBSERVADO, NO_CONFORME
         ProductionDSL.KPIs kpis; // Rendimiento, Acidez, Peroxidos
@@ -33,20 +35,22 @@ contract Almazara {
 
     // --- FUNCIÓN DE INICIO ---
 
-    function crearLote() public {
+    function crearLote(string memory _nroRemito, uint256 _kilos) public {
         contadorLotes++;
 
-        // Inicializamos el lote en RECEPCION con KPIs en 0
         lotes[contadorLotes] = Lote({
             id: contadorLotes,
+            nroRemito: _nroRemito, // Guardamos el vínculo
+            kgIniciales: _kilos, // Guardamos el peso
             etapaActual: ProductionDSL.Etapa.RECEPCION,
             estadoCalidad: ProductionDSL.ResultadoValidacion.APROBADO,
             kpis: ProductionDSL.KPIs(0, 0, 0),
-            observaciones: "Inicio de proceso",
+            observaciones: "Recepcion de materia prima",
             creadoPor: msg.sender,
             timestamp: block.timestamp
         });
 
+        // Emitimos el evento con el código externo para facilitar búsquedas
         emit LoteCreado(contadorLotes, msg.sender);
     }
 

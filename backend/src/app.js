@@ -38,31 +38,48 @@ app.get("/lote/:id", async (req, res) => {
 // RUTA 2: Crear un Lote (POST)
 app.post("/crear-lote", async (req, res) => {
     try {
-        const { estado, hashMetadata } = req.body; // El frontend nos manda esto
+        // 1. Recibimos los datos del formulario de Recepción
+        const { nroRemito, kilos } = req.body;
 
-        // Conversión básica para el hash si viene como string simple
-        // (En producción validarías que sea un bytes32 válido)
-        const hashFormat = hashMetadata.startsWith("0x") ? hashMetadata : ethers.id(hashMetadata);
+        if (!nroRemito || !kilos) {
+            return res.status(400).json({ error: "Faltan datos (codigo o kilos)" });
+        }
 
-        console.log("Transacción iniciada...");
+        console.log(`Creando lote: ${nroRemito} (${kilos} kg)`);
         
-        // Llamada al contrato (Escritura)
-        const tx = await contract.crearLote(estado, hashFormat);
+        // 2. Enviamos a la Blockchain (Argumentos: string, uint)
+        const tx = await contract.crearLote(nroRemito, kilos); 
         
-        // Esperar confirmación
         await tx.wait();
 
         res.json({ 
             success: true, 
-            message: "Lote creado correctamente", 
+            message: "Lote creado y anclado en Blockchain", 
             txHash: tx.hash 
         });
 
     } catch (error) {
-        console.error("Error creando lote:", error);
+        console.error("Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+//RUTA 3: Avanzar etapa
+app.post("/avanzar-etapa",async (req,res) => {
+    const { idLote, etapa, rendimiento, acidez, peroxidos } = req.body;
+
+    const tx = await contract.avanzarEtapa(
+        idLote,
+        etapa,
+        rendimiento,
+        acidez,
+        peroxidos
+    );
+
+    await tx.wait();
+    res.send("Datos guardados en Blockchain");
+})
+
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
