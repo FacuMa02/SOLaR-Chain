@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express, { json } from "express";
 import cors from "cors";
 import { contract } from "./config/blockchain.js";
-import {ethers} from "ethers";
+import { ethers } from "ethers";
 
 const app = express();
 
@@ -14,18 +14,17 @@ app.use(cors());
 app.get("/lote/:id", async (req, res) => {
     try {
         const id = req.params.id;
-        
+
         // Llamada al contrato (Lectura)
         const lote = await contract.getLote(id);
-        
+
         // Formatear la respuesta (Solidity devuelve BigInts que JSON no entiende directo)
         const respuesta = {
             id: lote.id.toString(),
-            estado: lote.estado.toString(), // 0, 1, 2...
-            etapa: lote.etapa.toString(),
-            hashMetadata: lote.hashMetadata,
+            nroRemito: lote.nroRemito, // 0, 1, 2...
+            etapaActual: lote.etapaActual.toString(),
             creadoPor: lote.creadoPor,
-            fecha: new Date(Number(lote.fechaCreacion) * 1000).toISOString()
+            timestamp: new Date(Number(lote.timestamp) * 1000).toISOString()
         };
 
         res.json({ success: true, data: respuesta });
@@ -46,16 +45,16 @@ app.post("/crear-lote", async (req, res) => {
         }
 
         console.log(`Creando lote: ${nroRemito} (${kilos} kg)`);
-        
+
         // 2. Enviamos a la Blockchain (Argumentos: string, uint)
-        const tx = await contract.crearLote(nroRemito, kilos); 
-        
+        const tx = await contract.crearLote(nroRemito, kilos);
+
         await tx.wait();
 
-        res.json({ 
-            success: true, 
-            message: "Lote creado y anclado en Blockchain", 
-            txHash: tx.hash 
+        res.json({
+            success: true,
+            message: "Lote creado y anclado en Blockchain",
+            txHash: tx.hash
         });
 
     } catch (error) {
@@ -65,19 +64,23 @@ app.post("/crear-lote", async (req, res) => {
 });
 
 //RUTA 3: Avanzar etapa
-app.post("/avanzar-etapa",async (req,res) => {
-    const { idLote, etapa, rendimiento, acidez, peroxidos } = req.body;
+app.post("/avanzar-etapa", async (req, res) => {
+    try {
+        const { idLote, etapa, rendimiento, acidez, peroxidos } = req.body;
 
-    const tx = await contract.avanzarEtapa(
-        idLote,
-        etapa,
-        rendimiento,
-        acidez,
-        peroxidos
-    );
+        const tx = await contract.avanzarEtapa(
+            idLote,
+            etapa,
+            rendimiento,
+            acidez,
+            peroxidos
+        );
 
-    await tx.wait();
-    res.send("Datos guardados en Blockchain");
+        await tx.wait();
+        res.send("Datos guardados en Blockchain");
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Transacción inválida" })
+    }
 })
 
 
