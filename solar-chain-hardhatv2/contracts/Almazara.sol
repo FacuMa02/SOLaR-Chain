@@ -113,6 +113,10 @@ contract Almazara {
 
     // Función útil para que tu frontend sepa qué datos tiene el lote
     function getLote(uint256 _id) public view returns (Lote memory) {
+        // Verificamos si el ID guardado es distinto de 0.
+        // Si es 0, significa que es un lote fantasma (no inicializado).
+        require(lotes[_id].id != 0, "Lote no existe");
+
         return lotes[_id];
     }
 }

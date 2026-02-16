@@ -12,8 +12,10 @@ app.use(cors());
 
 // RUTA 1: Obtener información de un Lote (GET)
 app.get("/lote/:id", async (req, res) => {
+
+    const id = req.params.id;
+
     try {
-        const id = req.params.id;
 
         // Llamada al contrato (Lectura)
         const lote = await contract.getLote(id);
@@ -29,8 +31,24 @@ app.get("/lote/:id", async (req, res) => {
 
         res.json({ success: true, data: respuesta });
     } catch (error) {
-        console.error("Error al leer lote:", error);
-        res.status(500).json({ success: false, error: "Error al leer de Blockchain" });
+
+        if (error.reason === "Lote no existe" || error.message.includes("Lote inexistente")) {
+
+            // Log conciso (una sola línea)
+            console.warn(`⚠️  [404] Consulta de lote no encontrado: ID ${id}`);
+
+            return res.status(404).json({
+                success: false,
+                error: "El lote solicitado no existe en la Blockchain."
+            });
+        }
+
+        console.error(`❌ [500] Error interno al leer ID ${id}:`, error.code || error.message);
+
+        res.status(500).json({
+            success: false,
+            error: "Error de conexión con Blockchain"
+        });
     }
 });
 
