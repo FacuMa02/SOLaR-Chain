@@ -27,3 +27,7 @@ blockchain_db/
 # Hardhat Ignition default folder for deployments against a local node
 ignition/deployments/chain-31337
 ignition/deployments/chain-1337
+
+# Archivos de Frontend
+
+frontend/public
