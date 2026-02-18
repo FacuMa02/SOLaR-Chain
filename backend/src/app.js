@@ -91,13 +91,14 @@ app.post("/avanzar-etapa", async (req, res) => {
             etapa,
             rendimiento,
             acidez,
-            peroxidos
+            peroxidos,
+            { gasLimit: 500000 }
         );
 
         await tx.wait();
-        res.send("Datos guardados en Blockchain");
+        res.json({ success: true, message: "Etapa avanzada correctamente", txHash: tx.hash });
     } catch (error) {
-        res.status(500).json({ success: false, error: "Transacción inválida" })
+        res.status(500).json({ success: false, error: error.message });
     }
 })
 
