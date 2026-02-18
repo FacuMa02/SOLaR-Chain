@@ -1,110 +1,196 @@
-import 'dotenv/config';
-import express, { json } from "express";
-import cors from "cors";
-import { contract } from "./config/blockchain.js";
+import express from "express";
 import { ethers } from "ethers";
+import cors from "cors";
+import dotenv from "dotenv";
+import fs from "fs";
 
+// --- CONFIGURACIÓN ---
+dotenv.config();
 const app = express();
-
-// Middlewares
-app.use(json()); // Para que entienda JSON en el body
 app.use(cors());
+app.use(express.json());
 
-// RUTA 1: Obtener información de un Lote (GET)
-app.get("/lote/:id", async (req, res) => {
+// --- CONSTANTES ---
+const ETAPAS = ["RECEPCION", "MOLIENDA", "BATIDO", "CENTRIFUGADO", "DECANTACION", "ANALISIS", "ALMACENAMIENTO"];
+const RESULTADOS = ["APROBADO", "OBSERVADO", "NO_CONFORME"];
 
-    const id = req.params.id;
+// --- CONEXIÓN BLOCKCHAIN ---
+// Asegúrate que tu nodo (Ganache/Hardhat) esté corriendo en el puerto correcto
+const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
-    try {
+// Cargar ABI
+const jsonPath = "./src/abis/Almazara.json";
+const contractJson = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, contractJson.abi, wallet);
 
-        // Llamada al contrato (Lectura)
-        const lote = await contract.getLote(id);
+console.log(`🔗 Conectado al contrato en: ${process.env.CONTRACT_ADDRESS}`);
 
-        // Formatear la respuesta (Solidity devuelve BigInts que JSON no entiende directo)
-        const respuesta = {
-            id: lote.id.toString(),
-            nroRemito: lote.nroRemito, // 0, 1, 2...
-            etapaActual: lote.etapaActual.toString(),
-            creadoPor: lote.creadoPor,
-            timestamp: new Date(Number(lote.timestamp) * 1000).toISOString()
-        };
+// ==========================================
+// 🛠️ HELPER: TRADUCTOR DE ERRORES
+// ==========================================
+function parseBlockchainError(error) {
+    // Si el error viene de un REVERT simple (require/revert string)
+    if (error.reason) return error.reason;
+    if (error.shortMessage) return error.shortMessage;
 
-        res.json({ success: true, data: respuesta });
-    } catch (error) {
-
-        if (error.reason === "Lote no existe" || error.message.includes("Lote inexistente")) {
-
-            // Log conciso (una sola línea)
-            console.warn(`⚠️  [404] Consulta de lote no encontrado: ID ${id}`);
-
-            return res.status(404).json({
-                success: false,
-                error: "El lote solicitado no existe en la Blockchain."
-            });
-        }
-
-        console.error(`❌ [500] Error interno al leer ID ${id}:`, error.code || error.message);
-
-        res.status(500).json({
-            success: false,
-            error: "Error de conexión con Blockchain"
-        });
+    // Si es un Custom Error (TransicionInvalida, etc)
+    if (error.data) {
+        try {
+            const decoded = contract.interface.parseError(error.data);
+            if (decoded?.name === 'TransicionInvalida') {
+                const actual = Number(decoded.args[0]);
+                const solicitada = Number(decoded.args[1]);
+                return `Transición Inválida: No puedes saltar de ${ETAPAS[actual]} a ${ETAPAS[solicitada]}.`;
+            }
+        } catch (e) { /* Ignorar fallo de parseo */ }
     }
-});
+    return "Error en validación del Smart Contract.";
+}
 
-// RUTA 2: Crear un Lote (POST)
+// ==========================================
+// 🚀 ENDPOINT 1: CREAR LOTE
+// ==========================================
 app.post("/crear-lote", async (req, res) => {
+    const { remito } = req.body;
+
     try {
-        // 1. Recibimos los datos del formulario de Recepción
-        const { nroRemito, kilos } = req.body;
+        // Como no hay DB, generamos un ID temporal o usamos el remito como ID externo
+        const idTemporal = "TEMP-" + Date.now();
 
-        if (!nroRemito || !kilos) {
-            return res.status(400).json({ error: "Faltan datos (codigo o kilos)" });
-        }
+        console.log(`📝 Creando lote Remito: ${remito}...`);
 
-        console.log(`Creando lote: ${nroRemito} (${kilos} kg)`);
+        const tx = await contract.crearLote(remito, idTemporal, { gasLimit: 500000 });
+        const receipt = await tx.wait();
 
-        // 2. Enviamos a la Blockchain (Argumentos: string, uint)
-        const tx = await contract.crearLote(nroRemito, kilos);
-
-        await tx.wait();
+        // Buscamos el ID real de Blockchain en el evento
+        const eventLog = receipt.logs.find(log => {
+            try { return contract.interface.parseLog(log)?.name === 'LoteCreado'; }
+            catch { return false; }
+        });
+        const parsedLog = contract.interface.parseLog(eventLog);
+        const blockchainId = parsedLog.args[0].toString();
 
         res.json({
             success: true,
-            message: "Lote creado y anclado en Blockchain",
-            txHash: tx.hash
+            message: "Lote creado en Blockchain exitosamente.",
+            data: {
+                idBlockchain: blockchainId,
+                remito,
+                txHash: tx.hash
+            }
         });
 
     } catch (error) {
-        console.error("Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error("❌ Error Crear Lote:", error);
+        res.status(500).json({ success: false, error: parseBlockchainError(error) });
     }
 });
 
-//RUTA 3: Avanzar etapa
+// ==========================================
+// 🔄 ENDPOINT 2: AVANZAR ETAPA
+// ==========================================
 app.post("/avanzar-etapa", async (req, res) => {
+    // OJO: Ahora el frontend debe mandar el ID DE BLOCKCHAIN (ej: 1, 2, 3...)
+    const { idLoteBlockchain, etapa, rendimiento, acidez, peroxidos } = req.body;
+
     try {
-        const { idLote, etapa, rendimiento, acidez, peroxidos } = req.body;
+        console.log(`⚙️ Avanzando Lote ID ${idLoteBlockchain} a etapa ${ETAPAS[etapa]}...`);
 
         const tx = await contract.avanzarEtapa(
-            idLote,
+            idLoteBlockchain,
             etapa,
-            rendimiento,
-            acidez,
-            peroxidos,
+            rendimiento || 0,
+            acidez || 0,
+            peroxidos || 0,
             { gasLimit: 500000 }
         );
 
-        await tx.wait();
-        res.json({ success: true, message: "Etapa avanzada correctamente", txHash: tx.hash });
+        const receipt = await tx.wait();
+
+        // Leer resultado del evento
+        const eventLog = receipt.logs.find(log => {
+            try { return contract.interface.parseLog(log)?.name === 'AvanceEtapa'; }
+            catch { return false; }
+        });
+        const parsedLog = contract.interface.parseLog(eventLog);
+        const resultadoCode = Number(parsedLog.args[2]);
+        const motivo = parsedLog.args[3];
+
+        res.json({
+            success: true,
+            txHash: tx.hash,
+            resultado: RESULTADOS[resultadoCode],
+            motivo: motivo,
+            warning: resultadoCode > 0, // True si es Observado o No Conforme
+            message: resultadoCode > 0
+                ? `⚠️ Avanzado con observación: ${RESULTADOS[resultadoCode]} (${motivo})`
+                : "✅ Lote avanzado correctamente."
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        const mensaje = parseBlockchainError(error);
+        // Si es un error de lógica (Revert), devolvemos 400 Bad Request
+        res.status(400).json({ success: false, error: mensaje });
     }
-})
+});
 
+// ==========================================
+// 🔍 ENDPOINT 3: GET LOTE (CORREGIDO)
+// ==========================================
+app.get("/lote/:id", async (req, res) => {
+    const id = req.params.id;
 
-// Iniciar servidor
-const PORT = process.env.PORT || 3000;
+    try {
+        // Llamada al contrato
+        const lote = await contract.getLote(id);
+
+        // Si llegamos aquí, el lote existe
+        const data = {
+            id: lote.id.toString(),
+            remito: lote.numeroRemito,
+            etapa: {
+                id: Number(lote.etapaActual),
+                nombre: ETAPAS[Number(lote.etapaActual)]
+            },
+            calidad: {
+                estado: RESULTADOS[Number(lote.estadoCalidad)],
+                observaciones: lote.observaciones
+            },
+            kpis: {
+                rendimiento: Number(lote.kpis.rendimiento),
+                acidez: Number(lote.kpis.acidez),
+                peroxidos: Number(lote.kpis.peroxidos)
+            },
+            // Convertimos timestamp BigInt a fecha legible
+            fecha: new Date(Number(lote.timestamp) * 1000).toLocaleString()
+        };
+
+        res.json({ success: true, data });
+
+    } catch (error) {
+        // --- AQUÍ ESTÁ LA MAGIA ---
+
+        // 1. Detectar si el error es "CALL_EXCEPTION" (típico de Revert en llamadas de lectura)
+        // O si el mensaje incluye el nombre de nuestro error personalizado
+        if (error.code === 'CALL_EXCEPTION' || error.message.includes("LoteNoExiste")) {
+
+            console.warn(`⚠️ Cliente solicitó Lote ID ${id} (No existe)`);
+
+            // Devolvemos 404 explícito
+            return res.status(404).json({
+                success: false,
+                error: "Lote no encontrado"
+            });
+        }
+
+        // 2. Cualquier otro error real
+        console.error("❌ Error GET Lote:", error);
+        res.status(500).json({ success: false, error: "Error interno del servidor" });
+    }
+});
+
+const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor Backend corriendo en http://localhost:${PORT}`);
+    console.log(`🚀 Backend (Solo Blockchain) corriendo en puerto ${PORT}`);
 });
