@@ -16,7 +16,7 @@ async function post(path, body) {
   }
 
   if (!res.ok) {
-    
+
     throw new Error(data?.error || data?.message || `Error HTTP ${res.status}`);
   }
 
@@ -24,11 +24,11 @@ async function post(path, body) {
 }
 
 export function login(password) {
-  return post("/auth/login", { password }); 
+  return post("/auth/login", { password });
 }
 
 export function recover(masterKey, newPassword) {
-  return post("/auth/recover", { masterKey, newPassword }); 
+  return post("/auth/recover", { masterKey, newPassword });
 }
 
 

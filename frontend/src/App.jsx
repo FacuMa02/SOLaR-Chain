@@ -67,8 +67,21 @@ export default function App() {
   }, []);
 
   async function onCreateLote(payload) {
-    const { lotes: next } = lotesSvc.createLote(payload);
+    // 1. Crear lote localmente
+    const { lote, lotes: next } = lotesSvc.createLote(payload);
     setLotes(next);
+
+    // 2. Enviar al blockchain (en background)
+    try {
+      await lotesSvc.submitLoteToBlockchain(lote.id);
+      // Actualizar estado con el idBlockchain
+      const updated = lotesSvc.getLotes();
+      setLotes(updated);
+      toast.success("Lote enviado al blockchain");
+    } catch (err) {
+      console.error("Error enviando a blockchain:", err);
+      toast.error(`Lote creado pero no se pudo registrar en blockchain: ${err.message}`);
+    }
   }
 
   

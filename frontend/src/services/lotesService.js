@@ -1,7 +1,7 @@
 import { STAGES } from "../data/stages";
+import * as api from "./apiClient";
 
 const KEY = "solar_lotes_v1";
-
 
 const FAIL_RATE = 0.25; // 25%
 const MIN_DELAY = 450;
@@ -118,11 +118,44 @@ export function createLote(payload) {
     stageIndex: 0, // etapa inicial
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    idBlockchain: null, // Se llenará cuando responda el backend
   };
 
   const next = [nuevo, ...lotes];
   save(next);
   return { lote: nuevo, lotes: next };
+}
+
+// Enviar lote al blockchain (backend)
+export async function submitLoteToBlockchain(loteId) {
+  const lotes = load();
+  const idx = lotes.findIndex((l) => l.id === loteId);
+  if (idx === -1) throw new Error("Lote no encontrado localmente.");
+
+  const lote = lotes[idx];
+
+  try {
+    // Enviar remito al backend
+    const response = await api.post("/crear-lote", { remito: lote.codigo });
+
+    if (!response.success || !response.data?.idBlockchain) {
+      throw new Error(response.error || "No se obtuvo ID de blockchain");
+    }
+
+    // Actualizar lote con idBlockchain
+    lotes[idx] = {
+      ...lotes[idx],
+      idBlockchain: response.data.idBlockchain,
+      txHash: response.data.txHash,
+      updatedAt: new Date().toISOString(),
+    };
+
+    save(lotes);
+    return lotes[idx];
+  } catch (error) {
+    console.error("❌ Error al enviar lote al blockchain:", error);
+    throw error;
+  }
 }
 
 // Simula guardado async con posibilidad de fallo

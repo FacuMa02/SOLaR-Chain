@@ -1,8 +1,11 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/routes/app.js",
+  "type": "module",
   "scripts": {
+    "start": "node src/routes/app.js",
+    "dev": "nodemon src/routes/app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,9 +16,14 @@
     "better-sqlite3": "^12.6.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "dotenv": "^16.0.3",
+    "ethers": "^6.13.4",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   },
   "description": ""
 }
