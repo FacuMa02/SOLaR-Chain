@@ -30,4 +30,4 @@ ignition/deployments/chain-1337
 
 # Archivos de Frontend
 
-frontend/public
+/frontend/public
