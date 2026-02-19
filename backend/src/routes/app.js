@@ -1,13 +1,19 @@
-const express = require("express");
-const Database = require("better-sqlite3");
-const argon2 = require("argon2");
-const cookieParser = require("cookie-parser");
-const cors = require("cors");
-const crypto = require("crypto");
-const { ethers } = require("ethers");
-const fs = require("fs");
-const path = require("path");
-require("dotenv").config();
+import express from "express";
+import Database from "better-sqlite3";
+import argon2 from "argon2";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import crypto from "crypto";
+import { ethers } from "ethers";
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ==========================================
 // 🛠️ INICIALIZACIÓN EXPRESS
@@ -357,4 +363,4 @@ app.listen(PORT, () => {
     console.log(`   - Blockchain endpoints: /crear-lote, /avanzar-etapa, /lote/:id`);
 });
 
-module.exports = app;
+export default app;
