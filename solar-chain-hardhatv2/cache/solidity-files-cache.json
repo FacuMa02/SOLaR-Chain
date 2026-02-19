@@ -1,0 +1,79 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "D:\\prog\\solar-chain\\solar-chain-hardhatv2\\contracts\\Almazara.sol": {
+      "lastModificationDate": 1770156687211,
+      "contentHash": "059d5e30491dadb182d5d154508ca3b9",
+      "sourceName": "contracts/Almazara.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./TrazabilidadDSL.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Almazara"
+      ]
+    },
+    "D:\\prog\\solar-chain\\solar-chain-hardhatv2\\contracts\\TrazabilidadDSL.sol": {
+      "lastModificationDate": 1770123862651,
+      "contentHash": "b26ecbccf55facd0f9821cb1d169a8de",
+      "sourceName": "contracts/TrazabilidadDSL.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "ProductionDSL"
+      ]
+    }
+  }
+}
