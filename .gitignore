@@ -2,8 +2,8 @@ node_modules
 .env
 
 # Hardhat files
-/cache
-/artifacts
+**/cache/
+**/artifacts/
 
 # Ganache local database
 build/
@@ -17,13 +17,17 @@ blockchain_db/
 *.log
 
 # TypeChain files
-/typechain
-/typechain-types
+**/typechain/
+solar-chain-hardhatv2/typechain-types/
 
 # solidity-coverage files
 /coverage
 /coverage.json
 
 # Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
-ignition/deployments/chain-1337
+solar-chain-hardhatv2/ignition/deployments/chain-31337
+solar-chain-hardhatv2/ignition/deployments/chain-1337
+
+# Archivos de Frontend
+
+/frontend/public

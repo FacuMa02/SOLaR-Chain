@@ -1,71 +1,74 @@
-import { ethers } from "hardhat";
-import { expect } from "chai";
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
+const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 
-describe("Almazara Trazabilidad", function () {
-  
-  // 1. FIXTURE: Esta función hace el deploy "limpio" antes de cada test.
-  // Es mucho más rápido que hacer deploy manual cada vez.
+describe("Sistema de Trazabilidad Almazara - Lógica Final", function () {
+
+  // --- FIXTURE: Prepara el escenario limpio ---
   async function deployAlmazaraFixture() {
-    // Obtenemos las cuentas de prueba (dueño y otro usuario)
-    const [owner, otherAccount] = await ethers.getSigners();
+    // Obtenemos cuentas de prueba
+    const [owner, operario] = await ethers.getSigners();
 
-    // Hacemos deploy del contrato
+    // Desplegamos librerías y contrato
+    const ProductionDSL = await ethers.getContractFactory("ProductionDSL");
+    const dsl = await ProductionDSL.deploy();
+    // Nota: Si ProductionDSL es librería externa, se linkea. Si es interna, Hardhat lo maneja solo.
+
     const Almazara = await ethers.getContractFactory("Almazara");
     const almazara = await Almazara.deploy();
 
-    return { almazara, owner, otherAccount };
+    return { almazara, owner, operario };
   }
 
-  describe("Función: Crear Lote", function () {
-    
-    it("Debería incrementar el contador de lotes al crear uno", async function () {
-      const { almazara } = await loadFixture(deployAlmazaraFixture);
-      
-      const mockHash = ethers.id("metadata-json-ipfs"); // Generamos un hash falso tipo bytes32
-      
-      // Estado 0 = BUENO (según tu Enum)
-      await almazara.crearLote(0, mockHash);
+  // --- TEST 1: CASO BLOQUEANTE (Integridad de Datos) ---
+  it("Debe BLOQUEAR (Revert) si el rendimiento es 0 absoluto", async function () {
+    const { almazara } = await loadFixture(deployAlmazaraFixture);
 
-      expect(await almazara.contadorLotes()).to.equal(1);
-    });
+    // 1. Crear lote y llevarlo hasta la puerta del Centrifugado
+    await almazara.crearLote("R-Test-Block", "1");
+    await almazara.avanzarEtapa(1, 1, 0, 0, 0); // Molienda (OK)
+    await almazara.avanzarEtapa(1, 2, 0, 0, 0); // Batido (OK)
 
-    it("Debería guardar los datos exactos (Estado, Hash y Creador)", async function () {
-      const { almazara, owner } = await loadFixture(deployAlmazaraFixture);
-      const mockHash = ethers.id("lote-aceite-2026");
-      
-      // Creamos un lote con EstadoSanitario.REGULAR (índice 1 en el Enum)
-      // Pasamos 1 porque en JS los Enums se manejan como enteros
-      await almazara.crearLote(1, mockHash);
-
-      const lote = await almazara.getLote(1);
-
-      // Verificaciones
-      expect(lote.estado).to.equal(1); // 1 = REGULAR
-      expect(lote.hashMetadata).to.equal(mockHash);
-      expect(lote.creadoPor).to.equal(owner.address); // Verifica la auditoría
-    });
-
-    it("Debería inicializar siempre en etapa RECEPCION (0)", async function () {
-      const { almazara } = await loadFixture(deployAlmazaraFixture);
-      const mockHash = ethers.id("test-etapa");
-
-      await almazara.crearLote(0, mockHash);
-      const lote = await almazara.getLote(1);
-
-      // Tu enum EtapaProceso empieza con RECEPCION, que es 0
-      expect(lote.etapa).to.equal(0); 
-    });
-
-    it("Debería emitir el evento LoteCreado", async function () {
-      const { almazara } = await loadFixture(deployAlmazaraFixture);
-      const mockHash = ethers.id("evento-test");
-
-      // Verificamos que al ejecutar la transacción, se emita el evento
-      await expect(almazara.crearLote(0, mockHash))
-        .to.emit(almazara, "LoteCreado")
-        // .withArgs(idEsperado, cualquierCosaParaLaFecha)
-        .withArgs(1, (val: any) => val > 0); // Aceptamos cualquier timestamp mayor a 0
-    });
+    // 2. Intentar pasar con Rendimiento 0
+    // ESPERAMOS: Que la transacción falle y nos devuelva el motivo
+    await expect(
+      almazara.avanzarEtapa(1, 3, 0, 0, 0) // Etapa 3 = Centrifugado
+    ).to.be.revertedWith("Error: Rendimiento no puede ser cero");
   });
+
+  // --- TEST 2: CASO NO CONFORME (Calidad Mala, pero Dato Válido) ---
+  it("Debe AVANZAR pero marcar NO_CONFORME si el rendimiento es bajo (2%)", async function () {
+    const { almazara } = await loadFixture(deployAlmazaraFixture);
+
+    await almazara.crearLote("R-Test-BadQuality", "2");
+    await almazara.avanzarEtapa(1, 1, 0, 0, 0);
+    await almazara.avanzarEtapa(1, 2, 0, 0, 0);
+
+    // 1. Ejecutamos la transacción con rendimiento 2% (Malo)
+    // ESPERAMOS: Que NO falle, pero que el evento diga "resultado: 2" (NO_CONFORME)
+    await expect(almazara.avanzarEtapa(1, 3, 2, 0, 0))
+      .to.emit(almazara, "AvanceEtapa")
+      .withArgs(1, 3, 2, "Rendimiento Bajo", anyValue); // 2 = NO_CONFORME
+
+    // 2. Verificación doble: Leemos el estado del lote en la blockchain
+    const lote = await almazara.getLote(1);
+    expect(lote.etapaActual).to.equal(3n); // Sí avanzó a Centrifugado
+    expect(lote.estadoCalidad).to.equal(2n); // Pero quedó marcado como NO_CONFORME
+  });
+
+  // --- TEST 3: CASO IDEAL (Calidad Buena) ---
+  it("Debe AVANZAR y marcar APROBADO si el rendimiento es óptimo (15%)", async function () {
+    const { almazara } = await loadFixture(deployAlmazaraFixture);
+
+    await almazara.crearLote("R-Test-GoodQuality", "3");
+    await almazara.avanzarEtapa(1, 1, 0, 0, 0);
+    await almazara.avanzarEtapa(1, 2, 0, 0, 0);
+
+    // ESPERAMOS: Resultado 0 (APROBADO)
+    await expect(almazara.avanzarEtapa(1, 3, 15, 0, 0))
+      .to.emit(almazara, "AvanceEtapa")
+      .withArgs(1, 3, 0, "Rendimiento Optimo", anyValue); // 0 = APROBADO
+  });
+
 });

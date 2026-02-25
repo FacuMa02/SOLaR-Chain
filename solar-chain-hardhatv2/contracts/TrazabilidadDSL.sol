@@ -2,157 +2,140 @@
 pragma solidity ^0.8.20;
 
 library ProductionDSL {
-    /* =======================
-            ENUMS
-    ======================= */
+    // --- ESTRUCTURAS DE DATOS ---
 
     enum Etapa {
-        RECEPCION,
-        MOLIENDA,
-        BATIDO,
-        CENTRIFUGADO,
-        DECANTACION,
-        ANALISIS,
-        ALMACENAMIENTO
+        RECEPCION, // 0
+        MOLIENDA, // 1
+        BATIDO, // 2
+        CENTRIFUGADO, // 3 (Aquí validamos Rendimiento)
+        DECANTACION, // 4
+        ANALISIS, // 5 (Aquí validamos Acidez y Peróxidos)
+        ALMACENAMIENTO // 6
     }
 
     enum ResultadoValidacion {
-        APROBADO,
-        OBSERVADO,
-        NO_CONFORME
+        APROBADO, // 0
+        OBSERVADO, // 1
+        NO_CONFORME // 2
     }
-
-    /* =======================
-            KPI STRUCT
-    ======================= */
 
     struct KPIs {
-        uint256 rendimiento; // porcentaje (ej: 6 = 6%)
-        uint256 acidez; // índice de acidez
-        uint256 peroxidos; // índice de peróxidos
+        uint256 rendimiento; // Porcentaje (ej: 15 para 15%)
+        uint256 acidez; // Decimales * 100 (ej: 80 para 0.8%)
+        uint256 peroxidos; // Entero (ej: 20)
     }
 
-    /* =======================
-        VALIDATION RESULT
-    ======================= */
-
     struct Validacion {
-        bool aplica;
+        bool esBloqueante; // <--- NUEVO: Si es true, hacemos Revert.
         ResultadoValidacion resultado;
         string motivo;
     }
 
-    /* =======================
-        TRANSITION CHECK
-    ======================= */
-
-    function validarEtapa(
-        Etapa etapa,
-        KPIs memory kpis
-    ) internal pure returns (Validacion memory) {
-        // Etapas SIN validación de KPIs
-        if (
-            etapa == Etapa.RECEPCION ||
-            etapa == Etapa.MOLIENDA ||
-            etapa == Etapa.BATIDO ||
-            etapa == Etapa.CENTRIFUGADO ||
-            etapa == Etapa.DECANTACION
-        ) {
-            return
-                Validacion({
-                    aplica: false,
-                    resultado: ResultadoValidacion.APROBADO,
-                    motivo: "Etapa sin validacion de KPIs"
-                });
-        }
-
-        // Etapa EXTRACCION (rendimiento)
-        if (etapa == Etapa.CENTRIFUGADO) {
-            if (kpis.rendimiento >= 10) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.APROBADO,
-                        "Rendimiento ideal"
-                    );
-            }
-            if (kpis.rendimiento >= 6) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.OBSERVADO,
-                        "Rendimiento aceptable"
-                    );
-            }
-            return
-                Validacion(
-                    true,
-                    ResultadoValidacion.NO_CONFORME,
-                    "Rendimiento bajo"
-                );
-        }
-
-        // Etapa ANALISIS (acidez + peroxidos)
-        if (etapa == Etapa.ANALISIS) {
-            if (kpis.acidez <= 8 && kpis.peroxidos <= 20) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.APROBADO,
-                        "Parametros dentro de norma"
-                    );
-            }
-
-            if (kpis.acidez <= 12 && kpis.peroxidos <= 25) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.OBSERVADO,
-                        "Parametros fuera del ideal"
-                    );
-            }
-
-            return
-                Validacion(
-                    true,
-                    ResultadoValidacion.NO_CONFORME,
-                    "Parametros fuera de norma"
-                );
-        }
-
-        // Etapa ALMACENAMIENTO (solo confirmación)
-        if (etapa == Etapa.ALMACENAMIENTO) {
-            return
-                Validacion({
-                    aplica: false,
-                    resultado: ResultadoValidacion.APROBADO,
-                    motivo: "Cierre del proceso productivo"
-                });
-        }
-
-        revert("Etapa no contemplada en DSL");
-    }
-
-    /* =======================
-        TRANSICIONES VALIDAS
-    ======================= */
-
+    // --- LÓGICA DE TRANSICIONES (Máquina de Estados) ---
     function esTransicionValida(
         Etapa actual,
         Etapa siguiente
     ) internal pure returns (bool) {
-        if (actual == Etapa.RECEPCION && siguiente == Etapa.MOLIENDA)
+        // Solo permitimos avanzar de a 1 paso a la vez
+        if (uint(siguiente) == uint(actual) + 1) {
             return true;
-        if (actual == Etapa.MOLIENDA && siguiente == Etapa.BATIDO) return true;
-        if (actual == Etapa.BATIDO && siguiente == Etapa.CENTRIFUGADO)
-            return true;
-        if (actual == Etapa.CENTRIFUGADO && siguiente == Etapa.DECANTACION)
-            return true;
-        if (actual == Etapa.DECANTACION && siguiente == Etapa.ANALISIS)
-            return true;
-        if (actual == Etapa.ANALISIS && siguiente == Etapa.ALMACENAMIENTO)
-            return true;
-
+        }
         return false;
+    }
+
+    // --- LÓGICA DE REGLAS DE NEGOCIO (KPIs) ---
+    function validarEtapa(
+        Etapa etapa,
+        KPIs memory kpis
+    ) internal pure returns (Validacion memory) {
+        // 1. ETAPAS DE TRÁNSITO (Sin validación de números)
+        // NOTA: Centrifugado y Análisis NO están aquí.
+        if (
+            etapa == Etapa.RECEPCION ||
+            etapa == Etapa.MOLIENDA ||
+            etapa == Etapa.BATIDO ||
+            etapa == Etapa.DECANTACION ||
+            etapa == Etapa.ALMACENAMIENTO
+        ) {
+            return
+                Validacion(false, ResultadoValidacion.APROBADO, "Transito OK");
+        }
+
+        // 2. ETAPA CENTRIFUGADO (Validamos Rendimiento)
+        if (etapa == Etapa.CENTRIFUGADO) {
+            // REGLA BLOQUEANTE: El 0 es imposible físicamente
+            if (kpis.rendimiento == 0) {
+                return
+                    Validacion(
+                        true,
+                        ResultadoValidacion.NO_CONFORME,
+                        "Error: Rendimiento no puede ser cero"
+                    );
+            }
+
+            // REGLAS DE CALIDAD (No bloqueantes, solo clasifican)
+            if (kpis.rendimiento >= 10) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Rendimiento Optimo"
+                    );
+            }
+            // Si es bajo (ej: 5%), avanza pero como NO_CONFORME
+            return
+                Validacion(
+                    false,
+                    ResultadoValidacion.NO_CONFORME,
+                    "Rendimiento Bajo"
+                );
+        }
+
+        // 3. ETAPA ANÁLISIS (Validamos Química)
+        if (etapa == Etapa.ANALISIS) {
+            // REGLA BLOQUEANTE: 0 absoluto en ambos es sospechoso (error de sensor)
+            if (kpis.acidez == 0 && kpis.peroxidos == 0) {
+                return
+                    Validacion(
+                        true,
+                        ResultadoValidacion.NO_CONFORME,
+                        "Error: Valores quimicos en cero"
+                    );
+            }
+
+            // REGLAS DE CALIDAD
+            if (kpis.acidez <= 8 && kpis.peroxidos <= 20) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Calidad Extra Virgen"
+                    );
+            }
+            if (kpis.acidez <= 20) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.OBSERVADO,
+                        "Calidad Virgen"
+                    );
+            }
+
+            // Si es muy ácido, avanza pero como NO_CONFORME (Lampante)
+            return
+                Validacion(
+                    false,
+                    ResultadoValidacion.NO_CONFORME,
+                    "Calidad Lampante (No Conforme)"
+                );
+        }
+
+        return
+            Validacion(
+                true,
+                ResultadoValidacion.NO_CONFORME,
+                "Etapa desconocida"
+            );
     }
 }
