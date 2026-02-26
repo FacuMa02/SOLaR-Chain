@@ -1,4 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+// same default as authService; include the /api prefix so callers can use
+// just "/auth/..." or "/lotes/...". port 3001 matches what the backend prints
+// when it starts (see logs).
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 async function request(method, path, body = null) {
     const options = {

@@ -1,4 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+// base URL of the backend. by default the server listens on port 3001
+// (see app.js output). the /api prefix is added here so callers can use
+// paths like "/auth/login".
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 async function post(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
