@@ -1,7 +1,8 @@
 import express from "express";
 import crypto from "crypto";
 import { getDB } from "../config/database.js";
-import { contract, parseBlockchainError, ETAPAS, RESULTADOS } from "../config/blockchain.js";
+import { getHistoryDB } from "../config/history_db.js";
+import { contract, wallet, parseBlockchainError, ETAPAS, RESULTADOS } from "../config/blockchain.js";
 
 const router = express.Router();
 
@@ -91,9 +92,9 @@ router.post("/crear-lote", async (req, res) => {
     }
 });
 
-// ==========================================
-// 3. OBTENER LOTE POR CÓDIGO (DB -> Smart Contract)
-// ==========================================
+
+//OBTENER LOTE POR CÓDIGO (DB -> Smart Contract)
+
 router.get("/consultar/:codigoLote", async (req, res) => {
     const { codigoLote } = req.params;
     const db = getDB();
@@ -127,9 +128,9 @@ router.get("/consultar/:codigoLote", async (req, res) => {
     }
 });
 
-// ==========================================
-// 4. CANCELAR LOTE (Botón de pánico)
-// ==========================================
+
+// CANCELAR LOTE (Botón de pánico)
+
 router.post("/cancelar-lote", async (req, res) => {
     const { codigoLote, motivo } = req.body;
     const db = getDB();
@@ -152,20 +153,84 @@ router.post("/cancelar-lote", async (req, res) => {
     }
 });
 
-// --- ENDPOINT: AVANZAR ETAPA ---
+
+// AVANZAR ETAPA Y GUARDAR EN BITÁCORA
 router.post("/avanzar-etapa", async (req, res) => {
     const { idLoteBlockchain, etapa, rendimiento, acidez, peroxidos } = req.body;
-    const db = getDB();
+    const historyDb = getHistoryDB();
+
     try {
-        const tx = await contract.avanzarEtapa(
-            idLoteBlockchain, etapa, rendimiento || 0, acidez || 0, peroxidos || 0, { gasLimit: 500000 }
+        // Esto NO gasta gas. Atrapa los Custom Errors (ej: Lote Cancelado, etc.)
+        await contract.avanzarEtapa.staticCall(
+            idLoteBlockchain,
+            etapa,
+            Number(rendimiento) || 0,
+            Number(acidez) || 0,
+            Number(peroxidos) || 0
         );
+
+        // Se inyectan 500,000 de gasLimit para que la EVM no se asfixie jamás.
+        const tx = await contract.avanzarEtapa(
+            idLoteBlockchain,
+            etapa,
+            Number(rendimiento) || 0,
+            Number(acidez) || 0,
+            Number(peroxidos) || 0,
+            { gasLimit: 500000 } // <-- EL SALVAVIDAS
+        );
+
+        console.log(`⏳ Esperando confirmación de Blockchain (Tx: ${tx.hash})...`);
         const receipt = await tx.wait();
 
-        // Aquí podrías agregar el insert a la tabla historial_procesos si lo deseas
+        // 2. Extraer la resolución oficial desde los Eventos de la Blockchain
+        const eventLog = receipt.logs.find(log => {
+            try { return contract.interface.parseLog(log)?.name === 'AvanceEtapa'; }
+            catch { return false; }
+        });
 
-        res.json({ success: true, txHash: tx.hash, message: "Avanzó de etapa correctamente." });
+        let resultadoStr = "DESCONOCIDO";
+        let motivoStr = "Sin observaciones";
+        const etapaStr = ETAPAS[etapa];
+
+        if (eventLog) {
+            const parsedLog = contract.interface.parseLog(eventLog);
+            resultadoStr = RESULTADOS[Number(parsedLog.args[2])]; // ej: APROBADO, OBSERVADO
+            motivoStr = parsedLog.args[3]; // ej: "Calidad Extra Virgen"
+        }
+
+        // 3. Guardar en la nueva base de datos history.sqlite
+        // Usamos formato ISO 8601 para la fecha y hora
+        const fechaHora = new Date().toISOString();
+
+        await historyDb.run(
+            `INSERT INTO transiciones (
+                blockchain_id, etapa, resultado, motivo, rendimiento, acidez, peroxidos, tx_hash, fecha_hora
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                idLoteBlockchain,
+                etapaStr,
+                resultadoStr,
+                motivoStr,
+                rendimiento || 0,
+                acidez || 0,
+                peroxidos || 0,
+                tx.hash,
+                fechaHora
+            ]
+        );
+
+        res.json({
+            success: true,
+            message: `Lote avanzado a ${etapaStr}. Resolución: ${resultadoStr}.`,
+            data: {
+                txHash: tx.hash,
+                motivo: motivoStr,
+                fechaHora: fechaHora
+            }
+        });
+
     } catch (error) {
+        console.error("Error:", error);
         res.status(400).json({ success: false, error: parseBlockchainError(error) });
     }
 });
@@ -218,5 +283,44 @@ router.get("/auditar/:idSqlite", async (req, res) => {
         res.status(500).json({ success: false, error: "Error al auditar: " + error.message });
     }
 });
+
+// OBTENER HISTORIAL DE UN LOTE (Línea de tiempo)
+router.get("/historial/:idLoteBlockchain", async (req, res) => {
+    const { idLoteBlockchain } = req.params;
+    const historyDb = getHistoryDB(); // Usamos la base de datos exclusiva de auditoría
+
+    try {
+        // Buscamos todas las transiciones del lote, ordenadas cronológicamente
+        const historial = await historyDb.all(
+            `SELECT etapa, resultado, motivo, rendimiento, acidez, peroxidos, tx_hash, fecha_hora 
+             FROM transiciones 
+             WHERE blockchain_id = ? 
+             ORDER BY fecha_hora ASC`,
+            [idLoteBlockchain]
+        );
+
+        // Si el arreglo está vacío, significa que el lote recién se creó y no ha avanzado, o no existe
+        if (!historial || historial.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No se encontró historial de transiciones para este lote. Es posible que aún esté en Recepción."
+            });
+        }
+
+        res.json({
+            success: true,
+            cantidadEventos: historial.length,
+            data: historial
+        });
+
+    } catch (error) {
+        console.error("❌ Error al consultar el historial:", error);
+        res.status(500).json({
+            success: false,
+            error: "Error interno al consultar la base de datos de auditoría."
+        });
+    }
+});
+
 
 export default router;
