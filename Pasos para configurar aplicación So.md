@@ -1,148 +1,102 @@
-# 🫒 Trazabilidad Aceite de Oliva - Guía de Ejecución
+# 🌿 Sistema de Trazabilidad Almazara 4.0 - Blockchain & IoT
 
-Este documento detalla los comandos necesarios para levantar el entorno de desarrollo local con persistencia de datos (Ganache + SQLite).
+Este proyecto es una plataforma de trazabilidad para la industria del aceite de oliva, utilizando Blockchain (Ethereum/Hardhat) para garantizar la inmutabilidad de los datos y SQLite para la gestión operativa y de auditoría.
 
-## 📋 Pre-requisitos
+## 🛠️ Requisitos Previos
 
-Asegúrate de tener instaladas las dependencias globales (solo se hace una vez):
+Node.js (v18 o superior)
 
-```bash
-npm install -g ganache
-```
+Git
 
-## 🖥️ PASO 1: La Blockchain (Ganache)
+Hardhat (incluido en las dependencias del proyecto)
 
-_Inicia el nodo simulado guardando los datos en disco._
+## 🚀 Configuración del Entorno
 
-1. Abre una **Terminal** en la raíz del proyecto.
-2. Ejecuta el nodo persistente:
+1. Clonar y Preparar el Repositorio
+   Primero, descargá el código en tu computadora e ingresá a la carpeta del proyecto:
 
-```bash
-ganache --wallet.deterministic --database.dbPath ./blockchain_db
+Bash
 
 ```
-
-> **⚠️ IMPORTANTE:** No cierres esta terminal. Si la cierras, la blockchain se detiene.
-> Si es la primera vez, creará la carpeta `blockchain_db`.
-
----
-
-## 🚀 PASO 2: Smart Contracts (Hardhat)
-
-_Compila y despliega el contrato en la red local._
-
-1. Abre una **Segunda Terminal**.
-2. Ve a la carpeta de blockchain:
-
-```bash
-cd blockchain
-
+git clone <tu-url-de-repositorio>
+cd almazara-thesis 2. Infraestructura Blockchain (Hardhat)
 ```
 
-3. Compila el contrato (para verificar errores y generar el ABI nuevo):
+Necesitamos levantar nuestra propia red blockchain local para pruebas. Abrí una terminal nueva y ejecutá:
 
-```bash
-npx hardhat compile
-
-```
-
-4. Despliega usando Ignition a la red local (Ganache):
-
-```bash
-npx hardhat ignition deploy ./ignition/modules/LoteModule.ts --network localhost
+Bash
 
 ```
+npm install
+npx hardhat node
+```
 
-### 🔄 Tarea Manual Post-Deploy (Puente al Backend)
+Dejá esa terminal corriendo. Abrí otra terminal nueva para desplegar el Smart Contract en esa red que acabamos de crear:
 
-Cada vez que hagas un deploy nuevo, debes actualizar el Backend:
+Bash
 
-1. **Copiar Dirección:** Copia la dirección del contrato que salió en la terminal (ej: `0x5FbDB...`) y pégala en `backend/.env` -> `CONTRACT_ADDRESS`.
-2. **Copiar ABI:** Copia el archivo JSON generado:
+```
+npx hardhat ignition deploy ./ignition/modules/AlmazaraModule.js --network localhost
+```
 
-- **Origen:** `blockchain/artifacts/contracts/Almazara.sol/Almazara.json`
-- **Destino:** `backend/src/abis/Almazara.json` (Reemplazar archivo existente).
+| Importante: Al finalizar, la terminal te va a mostrar una dirección (Contract Address) que empieza con 0x. Copiala, la vas a necesitar en el siguiente paso.
 
----
+3. Configuración del Backend
+   Ahora vamos a levantar la API y las bases de datos. Navegá a la carpeta del backend y prepará el entorno:
 
-## ⚙️ PASO 3: Base de Datos y Backend
+Bash
 
-_Inicia la base de datos SQLite y el servidor API._
-
-1. Abre una **Tercera Terminal**.
-2. Ve a la carpeta del backend:
-
-```bash
+```
 cd backend
-
+npm install
+cp .env.example .env
 ```
 
-3. **(Solo si borraste la DB o es la primera vez)** Inicializa la tabla SQLite:
+Abrí el archivo .env nuevo que se generó y pegá ahí la dirección del contrato que copiaste en el paso anterior, junto con tu clave privada.
 
-```bash
-node src/setup_db.js
+Finalmente, encendé el servidor (esto también creará las bases de datos SQLite automáticamente):
 
 ```
-
-4. Inicia el servidor:
-
-```bash
 node src/app.js
-
 ```
 
-> El servidor debería decir: `🚀 Servidor corriendo... Conectado a Blockchain...`
+## 💾 Gestión de Datos (Arquitectura Híbrida)
 
----
+El sistema utiliza tres capas de persistencia para garantizar seguridad y alto rendimiento en un entorno industrial:
 
-## 🧪 Cómo Probar (Thunder Client / Postman)
+Blockchain (Smart Contract): Almacena el estado actual del lote, las validaciones químicas estrictas y los hashes de integridad.
 
-### 1. Crear Lote (Ingreso a Planta)
+database.sqlite (Operativa): Gestiona el inventario de la tolva y los datos de los lotes para permitir búsquedas y lecturas rápidas desde el Frontend.
 
-**POST** `http://localhost:3000/crear-lote`
+history.sqlite (Auditoría): Funciona como una bitácora inmutable (Audit Log) de todos los eventos y transiciones capturados directamente desde los eventos de la blockchain.
 
-**Body (JSON):**
+## 🔌 Endpoints Principales de la API
 
-```json
-{
-  "remito": "R-2026-XYZ-001",
-  "peso": 5000,
-  "agricultor": "Finca Los Olivos",
-  "descripcion": "Aceituna Picual - Cosecha temprana"
-}
-```
+Gestión de Lotes (/api/lotes)
+POST /abastecer-tolva: Carga kilos de aceituna en el inventario local.
 
-### 2. Avanzar Etapa (Ej: A Molienda)
+POST /crear: Registra un lote en SQLite, genera su hash de integridad y lo ancla criptográficamente en la Blockchain.
 
-**POST** `http://localhost:3000/avanzar-etapa`
+POST /avanzar-etapa: Ejecuta la lógica de negocio en el Smart Contract y guarda el evento de resultado en la bitácora de auditoría.
 
-**Body (JSON):**
+POST /cancelar: Actúa como "botón de pánico" para anular permanentemente un lote con errores.
 
-```json
-{
-  "idLote": 1,
-  "etapa": 1,
-  "rendimiento": 0,
-  "acidez": 0,
-  "peroxidos": 0
-}
-```
+GET /consultar/:codigoLote: Obtiene los datos oficiales y el estado del lote directamente desde la Blockchain.
 
-_(Nota: Etapa 1 es Molienda. Los KPIs van en 0 porque Molienda no valida calidad)._
+GET /auditar/:idSqlite: Compara el hash local de la base de datos contra el hash inmutable de la blockchain para detectar alteraciones o fraudes.
 
----
+GET /historial/:idLoteBlockchain: Recupera la línea de tiempo completa del lote para dibujarla en el tablero del Frontend.
 
-## 🆘 Solución de Problemas Comunes
+## 🧪 Guía de Pruebas y Auditoría
 
-- **Error: `Nonce too low**`: Ocurre si reiniciaste Ganache (borraste `blockchain_db`) pero no reiniciaste tu billetera en MetaMask o el contador de transacciones del Backend.
-- _Solución:_ Borra la carpeta `blockchain_db` y vuelve a hacer deploy.
+Para verificar la integridad del sistema frente a un jurado, podés seguir este flujo de demostración de fraude:
 
-- **Error: `connect ECONNREFUSED 127.0.0.1:8545**`: Ganache no está corriendo.
-- _Solución:_ Revisa el PASO 1.
+Crear un Lote: Abastecé la tolva y creá un lote nuevo.
 
-- **Error: `call revert exception**`: Probablemente la dirección del contrato en el `.env` es vieja o incorrecta.
-- _Solución:_ Revisa el "Paso Manual" del PASO 2.
+Auditar: Consultá el endpoint de auditoría (/auditar/1); el estado que devuelve el sistema debe ser INTEGRO.
 
-```
+Simular Hackeo: Abrí el archivo database.sqlite con un gestor de bases de datos, modificá maliciosamente el peso o la variedad de ese lote y guardá los cambios.
 
-```
+Comprobar: Volvé a consultar el endpoint de auditoría. El sistema recalculará el hash local, detectará la discrepancia con la Blockchain y marcará el lote automáticamente como CORROMPIDO.
+
+¿Te queda cómodo este formato para llevarlo a tu repositorio? Si querés, el próximo paso que podemos hacer es dejar armado el archivo .env.example con las variables vacías para que quede todo el entorno documentado a la perfección.
