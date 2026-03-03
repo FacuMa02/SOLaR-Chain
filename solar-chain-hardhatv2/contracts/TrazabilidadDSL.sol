@@ -2,80 +2,146 @@
 pragma solidity ^0.8.20;
 
 library ProductionDSL {
-    // --- ESTRUCTURAS DE DATOS ---
-
     enum Etapa {
         RECEPCION, // 0
         MOLIENDA, // 1
         BATIDO, // 2
-        CENTRIFUGADO, // 3 (Aquí validamos Rendimiento)
+        CENTRIFUGADO, // 3 (Acidez y Peróxidos)
         DECANTACION, // 4
-        ANALISIS, // 5 (Aquí validamos Acidez y Peróxidos)
+        ANALISIS, // 5 (Rendimiento)
         ALMACENAMIENTO // 6
     }
 
+    // AÑADIDO: Estado CANCELADO
     enum ResultadoValidacion {
-        APROBADO, // 0
-        OBSERVADO, // 1
-        NO_CONFORME // 2
+        APROBADO,
+        OBSERVADO,
+        NO_CONFORME,
+        CANCELADO
     }
 
     struct KPIs {
-        uint256 rendimiento; // Porcentaje (ej: 15 para 15%)
-        uint256 acidez; // Decimales * 100 (ej: 80 para 0.8%)
-        uint256 peroxidos; // Entero (ej: 20)
+        uint256 rendimiento;
+        uint256 acidez;
+        uint256 peroxidos;
+    }
+
+    // ACTUALIZADO: Variables de peróxidos específicas
+    struct LimitesKPI {
+        uint256 maxAcidezExtra; // ej: 80 (0.8%)
+        uint256 maxAcidezVirgen; // ej: 200 (2.0%)
+        uint256 maxAcidezCorriente; // ej: 330 (3.3%)
+        uint256 maxPeroxidosVirgen; // <= 20 (Aplica a AOVE y Virgen)
+        uint256 maxPeroxidosCorriente; // <= 15
+        uint256 maxPeroxidosRefinado; // <= 5
+        uint256 minRendimiento; // ej: 10
     }
 
     struct Validacion {
-        bool esBloqueante; // <--- NUEVO: Si es true, hacemos Revert.
+        bool esBloqueante;
         ResultadoValidacion resultado;
         string motivo;
     }
 
-    // --- LÓGICA DE TRANSICIONES (Máquina de Estados) ---
     function esTransicionValida(
         Etapa actual,
         Etapa siguiente
     ) internal pure returns (bool) {
-        // Solo permitimos avanzar de a 1 paso a la vez
-        if (uint(siguiente) == uint(actual) + 1) {
-            return true;
-        }
+        if (uint(siguiente) == uint(actual) + 1) return true;
         return false;
     }
 
-    // --- LÓGICA DE REGLAS DE NEGOCIO (KPIs) ---
     function validarEtapa(
         Etapa etapa,
-        KPIs memory kpis
+        KPIs memory kpis,
+        LimitesKPI memory limites
     ) internal pure returns (Validacion memory) {
-        // 1. ETAPAS DE TRÁNSITO (Sin validación de números)
-        // NOTA: Centrifugado y Análisis NO están aquí.
         if (
             etapa == Etapa.RECEPCION ||
             etapa == Etapa.MOLIENDA ||
             etapa == Etapa.BATIDO ||
-            etapa == Etapa.DECANTACION ||
-            etapa == Etapa.ALMACENAMIENTO
+            etapa == Etapa.DECANTACION
         ) {
             return
                 Validacion(false, ResultadoValidacion.APROBADO, "Transito OK");
         }
 
-        // 2. ETAPA CENTRIFUGADO (Validamos Rendimiento)
+        // LÓGICA ACTUALIZADA: Clasificación por Acidez + Peróxidos
         if (etapa == Etapa.CENTRIFUGADO) {
-            // REGLA BLOQUEANTE: El 0 es imposible físicamente
+            if (kpis.acidez == 0 && kpis.peroxidos == 0) {
+                return
+                    Validacion(
+                        true,
+                        ResultadoValidacion.NO_CONFORME,
+                        "Error: Valores quimicos nulos"
+                    );
+            }
+
+            // AOVE: Acidez < 0.8% y Peróxidos <= 20
+            if (
+                kpis.acidez < limites.maxAcidezExtra &&
+                kpis.peroxidos <= limites.maxPeroxidosVirgen
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Calidad Extra Virgen"
+                    );
+            }
+            // Virgen: Acidez < 2.0% y Peróxidos <= 20
+            if (
+                kpis.acidez < limites.maxAcidezVirgen &&
+                kpis.peroxidos <= limites.maxPeroxidosVirgen
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.OBSERVADO,
+                        "Calidad Virgen"
+                    );
+            }
+            // Corriente: Acidez < 3.3% y Peróxidos <= 15
+            if (
+                kpis.acidez < limites.maxAcidezCorriente &&
+                kpis.peroxidos <= limites.maxPeroxidosCorriente
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.OBSERVADO,
+                        "Calidad Corriente"
+                    );
+            }
+            // Refinado: Peróxidos <= 5 (Si no cumplió los requisitos de acidez anteriores pero tiene peróxidos bajos)
+            if (kpis.peroxidos <= limites.maxPeroxidosRefinado) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.OBSERVADO,
+                        "Calidad Refinado"
+                    );
+            }
+
+            // Si falla todo lo anterior (Acidez alta o peróxidos fuera de rango)
+            return
+                Validacion(
+                    false,
+                    ResultadoValidacion.NO_CONFORME,
+                    "V. Lampante NO APTO PARA CONSUMO"
+                );
+        }
+
+        if (etapa == Etapa.ANALISIS) {
             if (kpis.rendimiento == 0) {
                 return
                     Validacion(
                         true,
                         ResultadoValidacion.NO_CONFORME,
-                        "Error: Rendimiento no puede ser cero"
+                        "Error: Rendimiento cero"
                     );
             }
-
-            // REGLAS DE CALIDAD (No bloqueantes, solo clasifican)
-            if (kpis.rendimiento >= 10) {
+            if (kpis.rendimiento >= limites.minRendimiento) {
                 return
                     Validacion(
                         false,
@@ -83,7 +149,6 @@ library ProductionDSL {
                         "Rendimiento Optimo"
                     );
             }
-            // Si es bajo (ej: 5%), avanza pero como NO_CONFORME
             return
                 Validacion(
                     false,
@@ -92,42 +157,12 @@ library ProductionDSL {
                 );
         }
 
-        // 3. ETAPA ANÁLISIS (Validamos Química)
-        if (etapa == Etapa.ANALISIS) {
-            // REGLA BLOQUEANTE: 0 absoluto en ambos es sospechoso (error de sensor)
-            if (kpis.acidez == 0 && kpis.peroxidos == 0) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.NO_CONFORME,
-                        "Error: Valores quimicos en cero"
-                    );
-            }
-
-            // REGLAS DE CALIDAD
-            if (kpis.acidez <= 8 && kpis.peroxidos <= 20) {
-                return
-                    Validacion(
-                        false,
-                        ResultadoValidacion.APROBADO,
-                        "Calidad Extra Virgen"
-                    );
-            }
-            if (kpis.acidez <= 20) {
-                return
-                    Validacion(
-                        false,
-                        ResultadoValidacion.OBSERVADO,
-                        "Calidad Virgen"
-                    );
-            }
-
-            // Si es muy ácido, avanza pero como NO_CONFORME (Lampante)
+        if (etapa == Etapa.ALMACENAMIENTO) {
             return
                 Validacion(
                     false,
-                    ResultadoValidacion.NO_CONFORME,
-                    "Calidad Lampante (No Conforme)"
+                    ResultadoValidacion.APROBADO,
+                    "Pendiente (Stock Disponible)"
                 );
         }
 

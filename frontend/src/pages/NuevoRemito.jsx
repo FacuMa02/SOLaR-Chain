@@ -12,7 +12,7 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export default function NuevoLote({ onCreate, toast }) {
+export default function NuevoRemito({ onCreate, toast }) {
   const nav = useNavigate();
 
   const [fechaRecepcion, setFechaRecepcion] = useState(todayISO());
@@ -64,7 +64,7 @@ export default function NuevoLote({ onCreate, toast }) {
         kg,
       });
 
-      toast.success("Lote creado correctamente");
+      toast.success("Remito creado correctamente");
       nav("/proceso");
     } catch (err) {
       toast.error(err?.message || "No se pudo crear el lote.");
@@ -77,7 +77,7 @@ export default function NuevoLote({ onCreate, toast }) {
     <div className="max-w-6xl mx-auto p-4">
       <div className="bg-base-100 rounded-2xl shadow p-5 space-y-5">
         <div>
-          <h1 className="text-xl font-semibold">Nuevo Lote</h1>
+          <h1 className="text-xl font-semibold">Nuevo Remito</h1>
           <p className="text-sm text-base-content/70">Descripción</p>
         </div>
 

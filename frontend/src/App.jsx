@@ -5,11 +5,13 @@ import Topbar from "./components/Topbar";
 import ToastHost from "./components/ToastHost";
 
 import Inicio from "./pages/Inicio";
-import NuevoLote from "./pages/NuevoLote";
+import NuevoRemito from "./pages/NuevoRemito";
 import ProcesoProductivo from "./pages/ProcesoProductivo";
 
 import Login from "./pages/Login";
 import Recover from "./pages/Recover";
+import CargarLote from "./pages/CargarLote";
+import CancelarLote from "./pages/CancelarLote";
 
 
 import * as lotesSvc from "./services/lotesService";
@@ -120,7 +122,9 @@ export default function App() {
           element={authed ? <ProtectedLayout onLogout={doLogout} /> : <Navigate to="/login" replace />}
         >
           <Route index element={<Inicio lotes={lotes} />} />
-          <Route path="/nuevo-lote" element={<NuevoLote onCreate={onCreateLote} toast={toast} />} />
+          <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateLote} toast={toast} />} />
+          <Route path="/cargar-lote" element={<CargarLote toast={toast} />} />
+          <Route path="/cancelar-lote" element={<CancelarLote toast={toast} />} />
           <Route
             path="/proceso"
             element={<ProcesoProductivo lotes={lotes} setLotes={setLotes} api={api} toast={toast} />}
