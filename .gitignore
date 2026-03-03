@@ -31,3 +31,7 @@ solar-chain-hardhatv2/ignition/deployments/chain-1337
 # Archivos de Frontend
 
 /frontend/public
+
+# Bases de datos SQLite
+backend/*.sqlite
+
