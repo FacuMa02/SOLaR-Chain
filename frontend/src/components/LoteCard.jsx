@@ -15,20 +15,18 @@ export default function LoteCard({ lote, stageName, onClick, onDragStart }) {
 
         <div className="text-sm text-base-content/70 space-y-1 mt-1">
           <div>
-            <span className="font-medium">Origen:</span> {lote.origen}
+            <span className="font-medium">Variedad:</span> {lote.variedad}
           </div>
           <div>
             <span className="font-medium">KG:</span> {lote.kg}
           </div>
           <div>
-            <span className="font-medium">Recepción:</span> {lote.fechaRecepcion}
+            <span className="font-medium">Recepción:</span> {lote.fechaInicio}
           </div>
         </div>
 
         <div className="mt-2 text-xs text-base-content/60">
-          <span className="font-medium">Detalle:</span>{" "}
-          {lote.variedad} • {lote.contenedorTipo}: {lote.contenedorCantidad} • Estado:{" "}
-          {lote.estado}
+          Estado: {lote.estado}
         </div>
       </div>
     </div>

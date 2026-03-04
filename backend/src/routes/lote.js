@@ -146,6 +146,11 @@ router.post("/cancelar-lote", async (req, res) => {
         const tx = await contract.cancelarLote(loteDb.blockchain_id, motivo, { gasLimit: 500000 });
         await tx.wait();
 
+        await db.run(
+            `UPDATE lotes SET estado = 'CANCELADO' WHERE blockchain_id = ?`,
+            [loteDb.blockchain_id]
+        );
+
         res.json({ success: true, message: `Lote '${codigoLote}' cancelado permanentemente en la Blockchain.`, txHash: tx.hash });
 
     } catch (error) {
@@ -217,6 +222,12 @@ router.post("/avanzar-etapa", async (req, res) => {
                 tx.hash,
                 fechaHora
             ]
+        );
+
+        const db = getDB();
+        await db.run(
+            `UPDATE lotes SET etapa_actual = ?, estado = ? WHERE blockchain_id = ?`,
+            [etapaStr, resultadoStr, idLoteBlockchain]
         );
 
         res.json({
@@ -321,6 +332,39 @@ router.get("/historial/:idLoteBlockchain", async (req, res) => {
         });
     }
 });
+
+// OBTENER TABLERO KANBAN
+
+router.get("/tablero", async (req, res) => {
+    const db = getDB();
+
+    try {
+        // Traemos todos los lotes que NO estén cancelados
+        const lotesActivos = await db.all(
+            `SELECT blockchain_id, codigo_lote, variedad, peso_kg, etapa_actual, estado 
+             FROM lotes 
+             WHERE estado != 'CANCELADO' AND blockchain_id IS NOT NULL`
+        );
+
+        // calcular índice de etapa basado en el arreglo ETAPAS (usado en frontend)
+        const data = lotesActivos.map((l) => {
+            const etapa_index = ETAPAS.findIndex((e) => e === l.etapa_actual);
+            return { ...l, etapa_index };
+        });
+
+        // Opcional: Podés enviar la lista plana o agruparla por etapa desde acá
+        // Para la mayoría de librerías Kanban de Frontend, una lista plana es ideal.
+        res.json({
+            success: true,
+            total: data.length,
+            data
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Error al cargar el tablero operativo." });
+    }
+});
+
 
 
 export default router;

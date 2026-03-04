@@ -80,6 +80,82 @@ export function getLotes() {
   return ensureSeed();
 }
 
+// --- nuevos helpers que usan el backend ---
+
+/**
+ * Obtiene el tablero real desde el servidor (ruta /tablero).
+ * Convierte los registros a la forma que espera el frontend.
+ */
+export async function fetchTablero() {
+  const response = await api.get("/lotes/tablero");
+  if (!response.success) {
+    throw new Error(response.error || "Error al cargar el tablero");
+  }
+
+  // cada lote viene con: blockchain_id, codigo_lote, variedad, peso_kg, etapa_actual, estado
+  // nosotros necesitamos: id, codigo, variedad, kg, stageIndex, estado
+  return response.data.map((l) => {
+    // backend may send etapa_index (numeric) or only etapa_actual string
+    let stageIndex = 0;
+    if (typeof l.etapa_index === "number") {
+      stageIndex = l.etapa_index;
+    } else {
+      const idx = STAGES.findIndex((s) => s === l.etapa_actual);
+      stageIndex = idx === -1 ? 0 : idx;
+    }
+
+    return {
+      id: l.codigo_lote,
+      codigo: l.codigo_lote,
+      variedad: l.variedad,
+      kg: l.peso_kg,
+      etapa_actual: l.etapa_actual,
+      stageIndex,
+      estado: l.estado,
+      blockchainId: l.blockchain_id,
+    };
+  });
+}
+
+/**
+ * Avanza un lote en la cadena de producción usando el código de lote.
+ * El backend se encarga de obtener el blockchain_id y cualquier otro
+ * dato necesario de la base de datos.
+ */
+export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPayload, maybePayload) {
+  // Soporte: advanceStage(blockchainId, etapa, { peroxidos, acidez, rendimiento })
+  // o advanceStage(codigoLote, etapa) (legacy) — prefer blockchainId usage.
+  let payload = {};
+  if (maybePayload) {
+    // called as (blockchainId, etapa, payload)
+    payload = {
+      idLoteBlockchain: codigoLoteOrBlockchainId,
+      etapa: toStageIndexOrPayload,
+      peroxidos: maybePayload.peroxidos || 0,
+      acidez: maybePayload.acidez || 0,
+      rendimiento: maybePayload.rendimiento || 0,
+    };
+  } else if (typeof toStageIndexOrPayload === "object") {
+    // called as (codigoLote, payload)
+    payload = {
+      codigoLote: codigoLoteOrBlockchainId,
+      etapa: toStageIndexOrPayload.etapa,
+      peroxidos: toStageIndexOrPayload.peroxidos || 0,
+      acidez: toStageIndexOrPayload.acidez || 0,
+      rendimiento: toStageIndexOrPayload.rendimiento || 0,
+    };
+  } else {
+    // called as (codigoLote, etapa)
+    payload = { codigoLote: codigoLoteOrBlockchainId, etapa: toStageIndexOrPayload };
+  }
+
+  const response = await api.post("/lotes/avanzar-etapa", payload);
+  if (!response.success) {
+    throw new Error(response.error || response.message || "Error al avanzar etapa");
+  }
+  return response;
+}
+
 export function setLotes(next) {
   save(next);
   return next;
