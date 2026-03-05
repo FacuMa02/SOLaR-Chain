@@ -7,10 +7,10 @@ import ToastHost from "./components/ToastHost";
 import Inicio from "./pages/Inicio";
 import NuevoLote from "./pages/NuevoLote";
 import ProcesoProductivo from "./pages/ProcesoProductivo";
+import Historial from "./pages/Historial";
 
 import Login from "./pages/Login";
 import Recover from "./pages/Recover";
-
 
 import * as lotesSvc from "./services/lotesService";
 
@@ -29,7 +29,6 @@ function ProtectedLayout({ onLogout }) {
   );
 }
 
-
 export default function App() {
   // ----- Toasts -----
   const [toasts, setToasts] = useState([]);
@@ -45,38 +44,62 @@ export default function App() {
     };
   }, []);
 
-  // Auth (session local) --------
+  // Auth (session local para UI) --------
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("solar_authed") === "1");
 
-  // -------- Lotes (LocalStorage) ------
-  const [lotes, _setLotes] = useState(() => lotesSvc.getLotes());
+  // -------- Lotes (Base de Datos) ------
+  const [lotes, setLotes] = useState([]);
 
+  // Cargar lotes desde el backend al iniciar sesión
   useEffect(() => {
-    lotesSvc.setLotes(lotes);
-  }, [lotes]);
+    if (authed) {
+      lotesSvc.getLotes()
+        .then(data => setLotes(data))
+        .catch(err => {
+          console.error("Error cargando lotes:", err);
+          toast.error("Error al cargar los lotes desde la base de datos");
+        });
+    }
+  }, [authed, toast]);
 
-  function setLotes(next) {
-    _setLotes(next);
-  }
-
-  // API mock Kanban
+  // API real para el Kanban
   const api = useMemo(() => {
     return {
-      updateStage: (loteId, toIndex) => lotesSvc.updateLoteStageAsync(loteId, toIndex),
+      updateStage: async (loteId, toIndex) => {
+        await lotesSvc.updateLoteStageAsync(loteId, toIndex);
+        // Actualizamos el estado local para que la tarjeta se mueva al instante en el frontend
+        setLotes((prev) => 
+          prev.map((l) => (l.id === loteId ? { ...l, stageIndex: toIndex } : l))
+        );
+      },
     };
   }, []);
 
+  // Crear lote y actualizar estado
   async function onCreateLote(payload) {
-    const { lotes: next } = lotesSvc.createLote(payload);
-    setLotes(next);
+    const nuevoLote = await lotesSvc.createLote(payload);
+    // Agregamos el nuevo lote al principio de la lista en memoria
+    setLotes((prev) => [nuevoLote, ...prev]);
   }
 
-  
   function LogoutWrapper() {
     const nav = useNavigate();
-    const doLogout = () => {
+    
+    const doLogout = async () => {
+      // Limpiamos la cookie en el backend
+      try {
+        await fetch("http://localhost:3001/auth/logout", { 
+          method: "POST", 
+          credentials: "include" 
+        });
+      } catch (e) {
+        console.error("Error cerrando sesión en el servidor", e);
+      }
+
+      // Limpiamos el frontend
       sessionStorage.removeItem("solar_authed");
       setAuthed(false);
+      setLotes([]); // Vaciamos los lotes de la memoria por seguridad
       nav("/login", { replace: true });
       toast.success("Sesión cerrada");
     };
@@ -112,7 +135,9 @@ export default function App() {
             path="/proceso"
             element={<ProcesoProductivo lotes={lotes} setLotes={setLotes} api={api} toast={toast} />}
           />
+          <Route path="/historial" element={<Historial toast={toast} />} />
         </Route>
+        
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to={authed ? "/" : "/login"} replace />} />
