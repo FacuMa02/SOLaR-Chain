@@ -1,12 +1,16 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { STAGES } from "../data/stages";
 import LoteCard from "../components/LoteCard";
 import ConfirmModal from "../components/ConfirmModal";
 import SideDrawer from "../components/SideDrawer";
 
-export default function ProcesoProductivo({ lotes, setLotes, api, toast }) {
+import * as lotesSvc from "../services/lotesService";
+
+export default function ProcesoProductivo({ toast }) {
+  const [lotes, setLotes] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [drag, setDrag] = useState(null);
-  const [confirm, setConfirm] = useState(null); 
+  const [confirm, setConfirm] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -42,6 +46,13 @@ export default function ProcesoProductivo({ lotes, setLotes, api, toast }) {
 
     const fromIndex = drag.fromIndex;
 
+    // Si se suelta en la misma sección, ignorar silenciosamente para evitar
+    // peticiones de validación innecesarias en el backend.
+    if (toIndex === fromIndex) {
+      setDrag(null);
+      return;
+    }
+
     if (toIndex !== fromIndex + 1) {
       toast.error("Movimiento inválido: solo se permite avanzar a la etapa siguiente.");
       setDrag(null);
@@ -57,18 +68,42 @@ export default function ProcesoProductivo({ lotes, setLotes, api, toast }) {
     setDrawerOpen(true);
   }
 
-  async function confirmMove() {
+  async function confirmMove(formData) {
     if (!confirm) return;
     const { loteId, toIndex } = confirm;
 
+    // Optimistic UI
     const prev = lotes;
     const next = lotes.map((l) => (l.id === loteId ? { ...l, stageIndex: toIndex } : l));
     setLotes(next);
 
     setConfirmLoading(true);
     try {
-      await api.updateStage(loteId, toIndex);
-      toast.success("Lote actualizado");
+      // Buscar el lote local para obtener el blockchainId
+      const lote = lotes.find((l) => l.id === loteId);
+      const blockchainId = lote?.blockchainId || lote?.idBlockchain || null;
+
+      if (!blockchainId) {
+        throw new Error("No se encontró el identificador en blockchain para este lote.");
+      }
+
+      await lotesSvc.advanceStage(blockchainId, toIndex, {
+        peroxidos: formData.peroxidos,
+        acidez: formData.acidez,
+        rendimiento: formData.rendimiento,
+      });
+
+      // Refrescar el tablero desde el backend para asegurar que el lote
+      // quede en la columna correcta y obtener estados actualizados.
+      try {
+        const refreshed = await lotesSvc.fetchTablero();
+        setLotes(refreshed);
+      } catch (refreshErr) {
+        // Si falla el refresco, no interrumpimos la UX — ya hicimos el cambio optimista.
+        console.warn("No se pudo refrescar el tablero:", refreshErr);
+      }
+
+      toast.success("Lote actualizado en blockchain");
       setConfirm(null);
     } catch (err) {
       toast.error(err?.message || "No se pudo actualizar el lote.");
@@ -83,10 +118,23 @@ export default function ProcesoProductivo({ lotes, setLotes, api, toast }) {
     setConfirm(null);
   }
 
+  // cargar datos iniciales al montar
+  useEffect(() => {
+    setLoading(true);
+    lotesSvc
+      .fetchTablero()
+      .then((data) => setLotes(data))
+      .catch((err) => {
+        toast.error(err.message || "Error cargando tablero");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     
     <div className="h-full w-full p-4 flex flex-col">
       <div className="bg-base-100 rounded-2xl shadow p-5 flex flex-col flex-1 min-h-0">
+        {loading && <div className="mb-2 text-sm text-base-content/70">Cargando lotes…</div>}
         <div className="mb-3">
           <h1 className="text-xl font-semibold">Proceso Productivo</h1>
           <p className="text-sm text-base-content/70">
@@ -153,16 +201,26 @@ export default function ProcesoProductivo({ lotes, setLotes, api, toast }) {
               <div className="font-semibold">Descripción</div>
 
               <div className="text-sm space-y-1">
-                <div><span className="font-medium">Fecha:</span> {selected.fechaRecepcion}</div>
-                <div><span className="font-medium">Productor:</span> {selected.productor}</div>
-                <div><span className="font-medium">Origen:</span> {selected.origen}</div>
-                <div><span className="font-medium">Estado:</span> {selected.estado}</div>
-                <div>
-                  <span className="font-medium">Cajones/Bolsas:</span>{" "}
-                  {selected.contenedorTipo}: {selected.contenedorCantidad}
-                </div>
-                <div><span className="font-medium">Variedad:</span> {selected.variedad}</div>
-                <div><span className="font-medium">KG:</span> {selected.kg}</div>
+                {selected.codigo && (
+                  <div>
+                    <span className="font-medium">Código:</span> {selected.codigo}
+                  </div>
+                )}
+                {selected.variedad && (
+                  <div>
+                    <span className="font-medium">Variedad:</span> {selected.variedad}
+                  </div>
+                )}
+                {selected.kg !== undefined && (
+                  <div>
+                    <span className="font-medium">KG:</span> {selected.kg}
+                  </div>
+                )}
+                {selected.estado && (
+                  <div>
+                    <span className="font-medium">Estado:</span> {selected.estado}
+                  </div>
+                )}
                 <div>
                   <span className="font-medium">Etapa actual:</span>{" "}
                   {STAGES[selected.stageIndex] || "—"}

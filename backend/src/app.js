@@ -15,7 +15,6 @@ app.use(cors({
     credentials: true,
 }));
 
-
 // 1. Inicializar AMBAS Bases de Datos en paralelo
 Promise.all([initDB(), initHistoryDB()]).then(() => {
 

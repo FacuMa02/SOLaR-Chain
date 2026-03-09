@@ -30,7 +30,55 @@ function ProtectedLayout({ onLogout }) {
     </div>
   );
 }
+function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote }) {
+  const nav = useNavigate();
+  const doLogout = () => {
+    sessionStorage.removeItem("solar_authed");
+    setAuthed(false);
+    nav("/login", { replace: true });
+    toast.success("Sesión cerrada");
+  };
 
+  return (
+    <Routes>
+      {/* Auth routes */}
+      <Route
+        path="/login"
+        element={
+          authed ? (
+            <Navigate to="/" replace />
+          ) : (
+            <Login
+              toast={toast}
+              onLoggedIn={() => {
+                sessionStorage.setItem("solar_authed", "1");
+                setAuthed(true);
+              }}
+            />
+          )
+        }
+      />
+      <Route path="/recover" element={authed ? <Navigate to="/" replace /> : <Recover toast={toast} />} />
+
+      {/* Protected app */}
+      <Route
+        element={authed ? <ProtectedLayout onLogout={doLogout} /> : <Navigate to="/login" replace />}
+      >
+        <Route index element={<Inicio lotes={lotes} />} />
+        <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateLote} toast={toast} />} />
+        <Route path="/cargar-lote" element={<CargarLote toast={toast} />} />
+        <Route path="/cancelar-lote" element={<CancelarLote toast={toast} />} />
+        <Route
+          path="/proceso"
+          element={<ProcesoProductivo toast={toast} />}
+        />
+      </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to={authed ? "/" : "/login"} replace />} />
+    </Routes>
+  );
+}
 
 export default function App() {
   // ----- Toasts -----
@@ -51,6 +99,7 @@ export default function App() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("solar_authed") === "1");
 
   // -------- Lotes (LocalStorage) ------
+  // seguiremos guardando datos locales para otras pantallas (Inicio, etc.)
   const [lotes, _setLotes] = useState(() => lotesSvc.getLotes());
 
   useEffect(() => {
@@ -61,7 +110,7 @@ export default function App() {
     _setLotes(next);
   }
 
-  // API mock Kanban
+  // La pantalla de proceso ya no usa el mock; consulta directamente al backend.
   const api = useMemo(() => {
     return {
       updateStage: (loteId, toIndex) => lotesSvc.updateLoteStageAsync(loteId, toIndex),
@@ -87,60 +136,10 @@ export default function App() {
   }
 
   
-  function LogoutWrapper() {
-    const nav = useNavigate();
-    const doLogout = () => {
-      sessionStorage.removeItem("solar_authed");
-      setAuthed(false);
-      nav("/login", { replace: true });
-      toast.success("Sesión cerrada");
-    };
-
-    return (
-      <Routes>
-        {/* Auth routes */}
-        <Route
-          path="/login"
-          element={
-            authed ? (
-              <Navigate to="/" replace />
-            ) : (
-              <Login
-                toast={toast}
-                onLoggedIn={() => {
-                  sessionStorage.setItem("solar_authed", "1");
-                  setAuthed(true);
-                }}
-              />
-            )
-          }
-        />
-        <Route path="/recover" element={authed ? <Navigate to="/" replace /> : <Recover toast={toast} />} />
-
-        {/* Protected app */}
-        <Route
-          element={authed ? <ProtectedLayout onLogout={doLogout} /> : <Navigate to="/login" replace />}
-        >
-          <Route index element={<Inicio lotes={lotes} />} />
-          <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateLote} toast={toast} />} />
-          <Route path="/cargar-lote" element={<CargarLote toast={toast} />} />
-          <Route path="/cancelar-lote" element={<CancelarLote toast={toast} />} />
-          <Route
-            path="/proceso"
-            element={<ProcesoProductivo lotes={lotes} setLotes={setLotes} api={api} toast={toast} />}
-          />
-        </Route>
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to={authed ? "/" : "/login"} replace />} />
-      </Routes>
-    );
-  }
-
   return (
     <BrowserRouter>
       <ToastHost toasts={toasts} />
-      <LogoutWrapper />
+      <LogoutWrapper authed={authed} setAuthed={setAuthed} toast={toast} lotes={lotes} setLotes={setLotes} onCreateLote={onCreateLote} />
     </BrowserRouter>
   );
 }

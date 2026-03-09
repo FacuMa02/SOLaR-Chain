@@ -18,13 +18,15 @@ export async function initDB() {
     await dbInstance.exec(`
         CREATE TABLE IF NOT EXISTS lotes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo_lote TEXT NOT NULL UNIQUE,
+            codigo_lote TEXT UNIQUE NOT NULL, 
             fecha_inicio TEXT NOT NULL,
             variedad TEXT NOT NULL,
             peso_kg REAL NOT NULL,
             blockchain_id INTEGER,
             hash_integridad TEXT,
-            tx_creacion_hash TEXT
+            tx_creacion_hash TEXT,
+            etapa_actual TEXT DEFAULT 'RECEPCION', -- NUEVO: Caché para el Kanban
+            estado TEXT DEFAULT 'APROBADO'         -- NUEVO: Para filtrar los cancelados
         );
 
         CREATE TABLE IF NOT EXISTS users (
