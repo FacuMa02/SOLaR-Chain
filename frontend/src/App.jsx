@@ -7,6 +7,7 @@ import ToastHost from "./components/ToastHost";
 import Inicio from "./pages/Inicio";
 import NuevoRemito from "./pages/NuevoRemito";
 import ProcesoProductivo from "./pages/ProcesoProductivo";
+import Historial from "./pages/Historial";
 
 import Login from "./pages/Login";
 import Recover from "./pages/Recover";
@@ -72,8 +73,8 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote
           path="/proceso"
           element={<ProcesoProductivo toast={toast} />}
         />
+        <Route path="/historial" element={<Historial toast={toast} />} />
       </Route>
-
       {/* Fallback */}
       <Route path="*" element={<Navigate to={authed ? "/" : "/login"} replace />} />
     </Routes>
