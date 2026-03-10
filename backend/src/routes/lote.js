@@ -73,6 +73,11 @@ router.post("/crear-lote", async (req, res) => {
         const eventLog = receipt.logs.find(log => {
             try { return contract.interface.parseLog(log)?.name === 'LoteCreado'; } catch { return false; }
         });
+
+        if (!eventLog) {
+            throw new Error("No se encontró el evento 'LoteCreado' en la transacción. Verifica que el contrato emita el evento correctamente.");
+        }
+
         const blockchainId = Number(contract.interface.parseLog(eventLog).args[0]);
 
         // --- ACTUALIZAR SQLite Y DESCONTAR TOLVA ---
@@ -88,6 +93,7 @@ router.post("/crear-lote", async (req, res) => {
         res.json({ success: true, data: { idSqlite, blockchainId, hashIntegridad, stockRestante: nuevoPesoTolva } });
 
     } catch (error) {
+        console.log(error);
         res.status(500).json({ success: false, error: parseBlockchainError(error) });
     }
 });
@@ -365,6 +371,56 @@ router.get("/tablero", async (req, res) => {
     }
 });
 
+// GET: Historial de lotes (Paginado, búsqueda y últimos 3 años)
+router.get("/lotes", async (req, res) => {
+    const { search = "", page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
+    const db = getDB();
+    const historyDb = getHistoryDB();
+
+    // Filtro: Últimos 3 años exactos desde hoy
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    const dateLimit = threeYearsAgo.toISOString().split('T')[0];
+
+    let query = "SELECT id, codigo_lote as codigo, fecha_inicio as fechaRecepcion, variedad, peso_kg as kg, blockchain_id, hash_integridad, tx_creacion_hash, etapa_actual, estado FROM lotes WHERE fecha_inicio >= ?";
+    const params = [dateLimit];
+
+    if (search) {
+        query += " AND codigo_lote LIKE ?";
+        params.push(`%${search}%`);
+    }
+
+    // Contar el total para la paginación
+    const countQuery = `SELECT COUNT(*) as total FROM (${query})`;
+    const totalRow = await db.get(countQuery, params);
+    const total = totalRow ? totalRow.total : 0;
+
+    // Traer los datos
+    query += " ORDER BY fecha_inicio DESC LIMIT ? OFFSET ?";
+    params.push(Number(limit), Number(offset));
+
+    const lotes = await db.all(query, params);
+
+    // Incluir historial para cada lote
+    const lotesConHistorial = await Promise.all(lotes.map(async (lote) => {
+        const historial = await historyDb.all(
+            `SELECT etapa, resultado, motivo, rendimiento, acidez, peroxidos, tx_hash, fecha_hora 
+             FROM transiciones 
+             WHERE blockchain_id = ? 
+             ORDER BY fecha_hora ASC`,
+            [lote.blockchain_id]
+        );
+        return { ...lote, historial: historial || [] };
+    }));
+
+    res.json({
+        data: lotesConHistorial,
+        total,
+        page: Number(page),
+        totalPages: Math.ceil(total / limit)
+    });
+});
 
 
 export default router;

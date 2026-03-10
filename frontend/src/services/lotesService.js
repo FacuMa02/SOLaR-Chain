@@ -1,6 +1,7 @@
 import { STAGES } from "../data/stages";
 import * as api from "./apiClient";
 
+const url = import.meta.env.VITE_API_LOTE_URL;
 const KEY = "solar_lotes_v1";
 
 const FAIL_RATE = 0.25; // 25%
@@ -260,4 +261,12 @@ export async function updateLoteStageAsync(loteId, toStageIndex) {
 
   save(lotes);
   return lotes[idx];
+}
+
+export async function getHistorial(search = "", page = 1, limit = 10) {
+  const res = await fetch(`${url}/lotes?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`, {
+    credentials: "include"
+  });
+  if (!res.ok) throw new Error("Error al obtener el historial");
+  return await res.json();
 }

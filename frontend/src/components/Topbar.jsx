@@ -30,6 +30,9 @@ export default function Topbar({ onLogout }) {
             <NavLink to="/proceso" className={tabClass}>
               Proceso productivo
             </NavLink>
+            <NavLink to="/historial" className={tabClass}>
+              Historial
+            </NavLink>
           </div>
 
           <button className="btn btn-sm btn-outline" onClick={onLogout} type="button">
