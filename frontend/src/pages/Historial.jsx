@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as lotesSvc from '../services/lotesService';
+import SideDrawer from '../components/SideDrawer';
+import HistorialLote from '../components/HistorialLote';
 
 export default function Historial({ toast }) {
   const [lotes, setLotes] = useState([]);
@@ -8,6 +10,10 @@ export default function Historial({ toast }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [selectedLote, setSelectedLote] = useState(null);
+  const [timelineEvents, setTimelineEvents] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState("");
 
   const fetchHistorial = useCallback(async (searchTerm = "", pageNum = 1) => {
     setLoading(true);
@@ -30,6 +36,30 @@ export default function Historial({ toast }) {
     e.preventDefault();
     setCurrentSearch(search);
     setPage(1); // Resetear a la página 1 al buscar
+  };
+
+  const handleOpenTimeline = async (lote) => {
+    setSelectedLote(lote);
+    setTimelineEvents([]);
+    setTimelineError("");
+    setTimelineLoading(true);
+
+    try {
+      const eventos = await lotesSvc.getLoteTimeline(lote.blockchain_id);
+      setTimelineEvents(eventos);
+    } catch (err) {
+      setTimelineError(err.message || "No se pudo cargar el historial del lote.");
+      toast.error(err.message || "No se pudo cargar el historial del lote.");
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const handleCloseTimeline = () => {
+    setSelectedLote(null);
+    setTimelineEvents([]);
+    setTimelineError("");
+    setTimelineLoading(false);
   };
 
   return (
@@ -66,7 +96,11 @@ export default function Historial({ toast }) {
               <tr><td colSpan="4" className="text-center py-4">No se encontraron lotes.</td></tr>
             ) : (
               lotes.map((lote) => (
-                <tr key={lote.id}>
+                <tr
+                  key={lote.id}
+                  className="cursor-pointer transition hover:bg-base-200"
+                  onClick={() => handleOpenTimeline(lote)}
+                >
                   <td className="font-semibold">{lote.codigo}</td>
                   <td>{lote.fechaRecepcion}</td>
                   <td>{lote.variedad}</td>
@@ -96,6 +130,19 @@ export default function Historial({ toast }) {
           Siguiente
         </button>
       </div>
+
+      <SideDrawer
+        open={!!selectedLote}
+        title={selectedLote ? `Trazabilidad ${selectedLote.codigo}` : "Trazabilidad"}
+        onClose={handleCloseTimeline}
+      >
+        <HistorialLote
+          lote={selectedLote}
+          eventos={timelineEvents}
+          loading={timelineLoading}
+          error={timelineError}
+        />
+      </SideDrawer>
     </div>
   );
 }

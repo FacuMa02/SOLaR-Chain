@@ -45,6 +45,7 @@ export default function ProcesoProductivo({ toast }) {
     if (!loteId || !drag) return;
 
     const fromIndex = drag.fromIndex;
+    const lote = lotes.find((item) => item.id === loteId);
 
     // Si se suelta en la misma sección, ignorar silenciosamente para evitar
     // peticiones de validación innecesarias en el backend.
@@ -54,7 +55,18 @@ export default function ProcesoProductivo({ toast }) {
     }
 
     if (toIndex !== fromIndex + 1) {
-      toast.error("Movimiento inválido: solo se permite avanzar a la etapa siguiente.");
+      const blockchainId = lote?.blockchainId || lote?.idBlockchain || null;
+      const motivo = `Intento inválido: ${STAGES[fromIndex]} -> ${STAGES[toIndex]}. Solo se permite avanzar a la etapa siguiente.`;
+
+      if (blockchainId) {
+        lotesSvc
+          .reportInvalidTransition(blockchainId, toIndex, motivo)
+          .then(() => toast.error("Error: Transición inválida"))
+          .catch((err) => toast.error(err.message || "No se pudo registrar el movimiento inválido."));
+      } else {
+        toast.error("Movimiento inválido: solo se permite avanzar a la etapa siguiente.");
+      }
+
       setDrag(null);
       return;
     }

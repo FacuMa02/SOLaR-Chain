@@ -157,6 +157,30 @@ export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPaylo
   return response;
 }
 
+export async function reportInvalidTransition(blockchainId, stageIndex, motivo) {
+  const response = await api.post("/lotes/registrar-intento-transicion", {
+    idLoteBlockchain: blockchainId,
+    etapaDestino: stageIndex,
+    motivo,
+  });
+
+  if (!response.success) {
+    throw new Error(response.error || response.message || "No se pudo registrar el intento inválido");
+  }
+
+  return response;
+}
+
+export async function getLoteTimeline(blockchainId) {
+  const response = await api.get(`/lotes/historial/${blockchainId}`);
+
+  if (!response.success) {
+    throw new Error(response.error || response.message || "No se pudo obtener la trazabilidad del lote");
+  }
+
+  return response.data || [];
+}
+
 export function setLotes(next) {
   save(next);
   return next;
