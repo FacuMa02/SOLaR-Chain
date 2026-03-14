@@ -171,8 +171,8 @@ export async function reportInvalidTransition(blockchainId, stageIndex, motivo) 
   return response;
 }
 
-export async function getLoteTimeline(blockchainId) {
-  const response = await api.get(`/lotes/historial/${blockchainId}`);
+export async function getLoteTimeline(sqliteId) {
+  const response = await api.get(`/lotes/historial-sqlite/${sqliteId}`);
 
   if (!response.success) {
     throw new Error(response.error || response.message || "No se pudo obtener la trazabilidad del lote");
@@ -293,4 +293,34 @@ export async function getHistorial(search = "", page = 1, limit = 10) {
   });
   if (!res.ok) throw new Error("Error al obtener el historial");
   return await res.json();
+}
+
+async function downloadExcel(endpoint, fallbackFileName) {
+  const res = await fetch(endpoint, { credentials: "include" });
+  if (!res.ok) throw new Error("Error al exportar archivo Excel");
+
+  const blob = await res.blob();
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const fileMatch = disposition.match(/filename="?([^";]+)"?/i);
+  const fileName = fileMatch?.[1] || fallbackFileName;
+
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
+export async function exportarLotesExcel(search = "") {
+  const endpoint = `${url}/lotes/export?search=${encodeURIComponent(search)}`;
+  await downloadExcel(endpoint, "lotes_ultimos_3_anios.xlsx");
+}
+
+export async function exportarHistorialLoteExcel(sqliteId) {
+  const endpoint = `${url}/historial-sqlite/${sqliteId}/export`;
+  await downloadExcel(endpoint, `historial_lote_sqlite_${sqliteId}.xlsx`);
 }

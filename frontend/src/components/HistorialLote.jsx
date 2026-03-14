@@ -29,7 +29,9 @@ function hasMetric(value) {
   return value !== null && value !== undefined && Number(value) !== 0;
 }
 
-export default function HistorialLote({ lote, eventos, loading, error }) {
+export default function HistorialLote({ lote, eventos, loading, error, onExport, exportLoading = false }) {
+  const loteBlockchainId = lote?.blockchain_id ?? lote?.blockchainId;
+
   return (
     <div className="space-y-5">
       <div className="text-sm leading-6">
@@ -42,7 +44,17 @@ export default function HistorialLote({ lote, eventos, loading, error }) {
 
       <div className="flex items-center justify-between">
         <p className="text-xs uppercase tracking-[0.2em] text-base-content/50">Trazabilidad</p>
-        <span className="text-xs text-base-content/60">{eventos.length} eventos</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-base-content/60">{eventos.length} eventos</span>
+          <button
+            type="button"
+            className="btn btn-xs btn-outline"
+            onClick={onExport}
+            disabled={exportLoading || !loteBlockchainId}
+          >
+            {exportLoading ? "Exportando..." : "Exportar Excel"}
+          </button>
+        </div>
       </div>
 
       {loading ? (
