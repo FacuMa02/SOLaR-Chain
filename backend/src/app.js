@@ -6,6 +6,7 @@ import { initHistoryDB } from "./config/history_db.js";
 
 import authRoutes from "./routes/auth.js";
 import loteRoutes from "./routes/lote.js";
+import remitoRoutes from "./routes/remito.js";
 
 dotenv.config();
 const app = express();
@@ -21,6 +22,7 @@ Promise.all([initDB(), initHistoryDB()]).then(() => {
     // 2. Montar las rutas
     app.use("/api/auth", authRoutes);
     app.use("/api/lotes", loteRoutes);
+    app.use("/api/remitos", remitoRoutes);
 
     // 3. Arrancar el servidor
     const PORT = process.env.PORT || 3000;

@@ -18,8 +18,14 @@ export default function Topbar({ onLogout }) {
             <NavLink to="/" className={tabClass} end>
               Inicio
             </NavLink>
+            <NavLink to="/proceso" className={tabClass}>
+              Proceso productivo
+            </NavLink>
             <NavLink to="/nuevo-remito" className={tabClass}>
               Nuevo remito
+            </NavLink>
+            <NavLink to="/remitos" className={tabClass}>
+              Ver remitos
             </NavLink>
             <NavLink to="/cargar-lote" className={tabClass}>
               Cargar lote
@@ -27,11 +33,8 @@ export default function Topbar({ onLogout }) {
             <NavLink to="/cancelar-lote" className={tabClass}>
               Cancelar lote
             </NavLink>
-            <NavLink to="/proceso" className={tabClass}>
-              Proceso productivo
-            </NavLink>
             <NavLink to="/historial" className={tabClass}>
-              Historial
+              Historial de Lotes
             </NavLink>
           </div>
 

@@ -16,6 +16,8 @@ export default function Historial({ toast }) {
   const [timelineError, setTimelineError] = useState("");
   const [exportingList, setExportingList] = useState(false);
   const [exportingLote, setExportingLote] = useState(false);
+  const [auditoria, setAuditoria] = useState(null);
+  const [auditando, setAuditando] = useState(false);
 
   const fetchHistorial = useCallback(async (searchTerm = "", pageNum = 1) => {
     setLoading(true);
@@ -45,16 +47,30 @@ export default function Historial({ toast }) {
     setTimelineEvents([]);
     setTimelineError("");
     setTimelineLoading(true);
+    setAuditoria(null);
+    setAuditando(true);
 
-    try {
-      const eventos = await lotesSvc.getLoteTimeline(lote.id);
-      setTimelineEvents(eventos);
-    } catch (err) {
-      setTimelineError(err.message || "No se pudo cargar el historial del lote.");
-      toast.error(err.message || "No se pudo cargar el historial del lote.");
-    } finally {
-      setTimelineLoading(false);
+    const [timelineResult, auditoriaResult] = await Promise.allSettled([
+      lotesSvc.getLoteTimeline(lote.id),
+      lotesSvc.auditarLote(lote.id),
+    ]);
+
+    if (timelineResult.status === "fulfilled") {
+      setTimelineEvents(timelineResult.value);
+    } else {
+      const msg = timelineResult.reason?.message || "No se pudo cargar el historial del lote.";
+      setTimelineError(msg);
+      toast.error(msg);
     }
+    setTimelineLoading(false);
+
+    if (auditoriaResult.status === "fulfilled") {
+      setAuditoria(auditoriaResult.value);
+    } else {
+      // Sin blockchain_id o sin sincronizar — no es un error crítico, no mostramos toast
+      setAuditoria({ estado: "SIN_SINCRONIZAR", esValido: null });
+    }
+    setAuditando(false);
   };
 
   const handleCloseTimeline = () => {
@@ -62,6 +78,8 @@ export default function Historial({ toast }) {
     setTimelineEvents([]);
     setTimelineError("");
     setTimelineLoading(false);
+    setAuditoria(null);
+    setAuditando(false);
   };
 
   const handleExportLotes = async () => {
@@ -180,6 +198,8 @@ export default function Historial({ toast }) {
           error={timelineError}
           onExport={handleExportHistorialLote}
           exportLoading={exportingLote}
+          auditoria={auditoria}
+          auditando={auditando}
         />
       </SideDrawer>
     </div>
