@@ -40,6 +40,13 @@ contract Almazara {
         ProductionDSL.ResultadoValidacion resultado,
         string motivo
     );
+    event TransicionInvalidaRegistrada(
+        uint256 indexed idSC,
+        ProductionDSL.Etapa etapaActual,
+        ProductionDSL.Etapa etapaSolicitada,
+        string motivo,
+        uint256 timestamp
+    );
     event LimitesActualizados(uint256 timestamp);
     event LoteCancelado(uint256 indexed idSC, string motivo, uint256 timestamp);
 
@@ -182,6 +189,22 @@ contract Almazara {
         lote.timestamp = block.timestamp;
 
         emit LoteCancelado(_idLote, _motivo, block.timestamp);
+    }
+
+    function registrarTransicionInvalida(
+        uint256 _idLote,
+        ProductionDSL.Etapa _etapaSolicitada,
+        string memory _motivo
+    ) public onlyOwner {
+        if (lotes[_idLote].id == 0) revert LoteNoExiste(_idLote);
+
+        emit TransicionInvalidaRegistrada(
+            _idLote,
+            lotes[_idLote].etapaActual,
+            _etapaSolicitada,
+            _motivo,
+            block.timestamp
+        );
     }
 
     function getLote(uint256 _id) public view returns (Lote memory) {
