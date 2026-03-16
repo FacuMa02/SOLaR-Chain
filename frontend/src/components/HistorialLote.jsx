@@ -30,7 +30,7 @@ function hasMetric(value) {
 }
 
 export default function HistorialLote({ lote, eventos, loading, error, onExport, exportLoading = false }) {
-  const loteBlockchainId = lote?.blockchain_id ?? lote?.blockchainId;
+  const loteSqliteId = lote?.id;
 
   return (
     <div className="space-y-5">
@@ -50,7 +50,7 @@ export default function HistorialLote({ lote, eventos, loading, error, onExport,
             type="button"
             className="btn btn-xs btn-outline"
             onClick={onExport}
-            disabled={exportLoading || !loteBlockchainId}
+            disabled={exportLoading || !loteSqliteId}
           >
             {exportLoading ? "Exportando..." : "Exportar Excel"}
           </button>
