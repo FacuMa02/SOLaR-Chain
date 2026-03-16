@@ -29,7 +29,46 @@ function hasMetric(value) {
   return value !== null && value !== undefined && Number(value) !== 0;
 }
 
-export default function HistorialLote({ lote, eventos, loading, error, onExport, exportLoading = false }) {
+function AuditoriaBadge({ auditoria, auditando }) {
+  if (auditando) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200 px-3 py-2 text-xs text-base-content/60">
+        <span className="loading loading-spinner loading-xs" />
+        Verificando integridad...
+      </div>
+    );
+  }
+
+  if (!auditoria || auditoria.estado === "SIN_SINCRONIZAR") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200 px-3 py-2 text-xs text-base-content/50">
+        <span>⬜</span> Sin sincronizar con blockchain
+      </div>
+    );
+  }
+
+  if (auditoria.esValido) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-xs text-success">
+        <span>✔</span> Integridad verificada — datos íntegros
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-error/50 bg-error/10 px-3 py-2 text-xs text-error">
+      <span className="font-semibold">⚠ ALERTA: datos alterados</span>
+      {auditoria.detalles && (
+        <span className="break-all text-error/70">
+          Hash local: {auditoria.detalles.hashLocalRecalculado}<br />
+          Hash blockchain: {auditoria.detalles.hashBlockchain}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export default function HistorialLote({ lote, eventos, loading, error, onExport, exportLoading = false, auditoria = null, auditando = false }) {
   const loteSqliteId = lote?.id;
 
   return (
@@ -41,6 +80,8 @@ export default function HistorialLote({ lote, eventos, loading, error, onExport,
           {lote?.variedad || "Sin variedad"} · {lote?.kg ?? "-"} kg · Estado: {lote?.estado || "-"}
         </p>
       </div>
+
+      <AuditoriaBadge auditoria={auditoria} auditando={auditando} />
 
       <div className="flex items-center justify-between">
         <p className="text-xs uppercase tracking-[0.2em] text-base-content/50">Trazabilidad</p>

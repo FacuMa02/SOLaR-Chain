@@ -181,6 +181,14 @@ export async function getLoteTimeline(sqliteId) {
   return response.data || [];
 }
 
+export async function auditarLote(sqliteId) {
+  const response = await api.get(`/lotes/auditar/${sqliteId}`);
+  if (!response.success) {
+    throw new Error(response.error || response.message || "No se pudo auditar el lote");
+  }
+  return response.auditoria;
+}
+
 export function setLotes(next) {
   save(next);
   return next;
