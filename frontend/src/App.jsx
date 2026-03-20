@@ -8,12 +8,12 @@ import Inicio from "./pages/Inicio";
 import NuevoRemito from "./pages/NuevoRemito";
 import ProcesoProductivo from "./pages/ProcesoProductivo";
 import Historial from "./pages/Historial";
+import ManualUsuario from "./pages/ManualUsuario";
 
 import Login from "./pages/Login";
 import Recover from "./pages/Recover";
 import CargarLote from "./pages/CargarLote";
 import CancelarLote from "./pages/CancelarLote";
-
 
 import * as lotesSvc from "./services/lotesService";
 
@@ -31,6 +31,7 @@ function ProtectedLayout({ onLogout }) {
     </div>
   );
 }
+
 function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote }) {
   const nav = useNavigate();
   const doLogout = () => {
@@ -59,6 +60,7 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote
           )
         }
       />
+      {/* RUTA PÚBLICA: Para cuando olvidaste la contraseña y estás deslogueado */}
       <Route path="/recover" element={authed ? <Navigate to="/" replace /> : <Recover toast={toast} />} />
 
       {/* Protected app */}
@@ -67,6 +69,7 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote
       >
         <Route index element={<Inicio lotes={lotes} />} />
         <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateLote} toast={toast} />} />
+        <Route path="/manual" element={<ManualUsuario />} />
         <Route path="/cargar-lote" element={<CargarLote toast={toast} />} />
         <Route path="/cancelar-lote" element={<CancelarLote toast={toast} />} />
         <Route
@@ -74,7 +77,11 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote
           element={<ProcesoProductivo toast={toast} />}
         />
         <Route path="/historial" element={<Historial toast={toast} />} />
+        
+        {/* RUTA PRIVADA: Para cambiar la contraseña desde el Topbar estando adentro */}
+        <Route path="/cambiar-contrasena" element={<Recover toast={toast} />} />
       </Route>
+      
       {/* Fallback */}
       <Route path="*" element={<Navigate to={authed ? "/" : "/login"} replace />} />
     </Routes>
@@ -136,7 +143,6 @@ export default function App() {
     }
   }
 
-  
   return (
     <BrowserRouter>
       <ToastHost toasts={toasts} />
