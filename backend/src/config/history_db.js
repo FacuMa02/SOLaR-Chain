@@ -27,7 +27,23 @@ export async function initHistoryDB() {
             tx_hash TEXT NOT NULL UNIQUE,
             fecha_hora TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS historial_eventos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blockchain_id INTEGER NOT NULL,
+            tipo_evento TEXT NOT NULL, -- 'AVANCE', 'CANCELACION', 'ALERTA_SEGURIDAD'
+            etapa TEXT NOT NULL,       -- En qué etapa ocurrió
+            detalles TEXT,             -- Motivo del error o datos del avance
+            tx_hash TEXT,
+            fecha TEXT NOT NULL
+        );
     `);
+
+    const historialEventosInfo = await historyDbInstance.all(`PRAGMA table_info(historial_eventos)`);
+    const hasTxHash = historialEventosInfo.some((column) => column.name === "tx_hash");
+
+    if (!hasTxHash) {
+        await historyDbInstance.exec(`ALTER TABLE historial_eventos ADD COLUMN tx_hash TEXT`);
+    }
 
     return historyDbInstance;
 }

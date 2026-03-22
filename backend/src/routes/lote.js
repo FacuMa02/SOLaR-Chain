@@ -3,8 +3,119 @@ import crypto from "crypto";
 import { getDB } from "../config/database.js";
 import { getHistoryDB } from "../config/history_db.js";
 import { contract, wallet, parseBlockchainError, ETAPAS, RESULTADOS } from "../config/blockchain.js";
+import { buildExcelBuffer, sendExcelFile } from "../utils/excelExport.js";
 
 const router = express.Router();
+
+let soporteRegistroInvalidoOnChain = null;
+
+async function registrarEventoHistorial({ blockchainId, tipoEvento, etapa, detalles, txHash = null, fecha = new Date().toISOString() }) {
+    const historyDb = getHistoryDB();
+    await historyDb.run(
+        `INSERT INTO historial_eventos (blockchain_id, tipo_evento, etapa, detalles, tx_hash, fecha)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [blockchainId, tipoEvento, etapa, detalles, txHash, fecha]
+    );
+}
+
+async function contratoSoportaRegistroInvalido() {
+    if (soporteRegistroInvalidoOnChain !== null) {
+        return soporteRegistroInvalidoOnChain;
+    }
+
+    const selector = contract.interface.getFunction("registrarTransicionInvalida").selector.slice(2).toLowerCase();
+    const deployedCode = await wallet.provider.getCode(contract.target);
+
+    soporteRegistroInvalidoOnChain = deployedCode.toLowerCase().includes(selector);
+    return soporteRegistroInvalidoOnChain;
+}
+
+async function registrarIntentoInvalidoEnBlockchain(blockchainId, etapaSolicitada, motivo) {
+    if (!await contratoSoportaRegistroInvalido()) {
+        return null;
+    }
+
+    const tx = await contract.registrarTransicionInvalida(blockchainId, etapaSolicitada, motivo, { gasLimit: 500000 });
+    await tx.wait();
+    return tx.hash;
+}
+
+async function obtenerBlockchainIdPorSqlite(db, idSqlite) {
+    const lote = await db.get("SELECT blockchain_id, codigo_lote FROM lotes WHERE id = ?", [idSqlite]);
+
+    if (!lote) {
+        return { error: "Lote no encontrado." };
+    }
+
+    if (!lote.blockchain_id) {
+        return { error: `El lote '${lote.codigo_lote}' no está sincronizado con blockchain.` };
+    }
+
+    return { blockchainId: lote.blockchain_id };
+}
+
+async function obtenerHistorialUnificado(historyDb, idLoteBlockchain) {
+    return historyDb.all(
+        `
+        SELECT 
+            etapa,
+            resultado,
+            motivo,
+            rendimiento,
+            acidez,
+            peroxidos,
+            tx_hash,
+            fecha_hora
+        FROM transiciones 
+        WHERE blockchain_id = ? 
+        
+        UNION ALL 
+        
+        SELECT 
+            etapa,
+            CASE tipo_evento
+                WHEN 'CANCELACION' THEN 'CANCELADO'
+                WHEN 'TRANSICION_INVALIDA' THEN 'TRANSICION_INVALIDA'
+                ELSE tipo_evento
+            END AS resultado,
+            detalles AS motivo,
+            0 AS rendimiento,
+            0 AS acidez,
+            0 AS peroxidos,
+            tx_hash,
+            fecha AS fecha_hora
+        FROM historial_eventos 
+        WHERE blockchain_id = ? 
+        
+        ORDER BY fecha_hora ASC
+        `,
+        [idLoteBlockchain, idLoteBlockchain]
+    );
+}
+
+function construirConsultaLotes({ search = "", incluirPaginacion = true, page = 1, limit = 10 }) {
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    const dateLimit = threeYearsAgo.toISOString().split("T")[0];
+
+    let query = "SELECT id, codigo_lote as codigo, fecha_inicio as fechaRecepcion, variedad, peso_kg as kg, blockchain_id as _blockchain_id, hash_integridad, tx_creacion_hash, etapa_actual, estado FROM lotes WHERE fecha_inicio >= ?";
+    const params = [dateLimit];
+
+    if (search) {
+        query += " AND codigo_lote LIKE ?";
+        params.push(`%${search}%`);
+    }
+
+    if (incluirPaginacion) {
+        const offset = (Number(page) - 1) * Number(limit);
+        query += " ORDER BY fecha_inicio DESC LIMIT ? OFFSET ?";
+        params.push(Number(limit), Number(offset));
+    } else {
+        query += " ORDER BY fecha_inicio DESC";
+    }
+
+    return { query, params, dateLimit };
+}
 
 //  ENDPOINT AUXILIAR: ABASTECER TOLVA en SQLite
 router.post("/abastecer-tolva", async (req, res) => {
@@ -157,6 +268,14 @@ router.post("/cancelar-lote", async (req, res) => {
             [loteDb.blockchain_id]
         );
 
+        await registrarEventoHistorial({
+            blockchainId: loteDb.blockchain_id,
+            tipoEvento: "CANCELACION",
+            etapa: "CANCELADO",
+            detalles: motivo,
+            txHash: tx.hash,
+        });
+
         res.json({ success: true, message: `Lote '${codigoLote}' cancelado permanentemente en la Blockchain.`, txHash: tx.hash });
 
     } catch (error) {
@@ -209,7 +328,7 @@ router.post("/avanzar-etapa", async (req, res) => {
             motivoStr = parsedLog.args[3]; // ej: "Calidad Extra Virgen"
         }
 
-        // 3. Guardar en la nueva base de datos history.sqlite
+        // Guardar la transición en la BD
         // Usamos formato ISO 8601 para la fecha y hora
         const fechaHora = new Date().toISOString();
 
@@ -248,6 +367,64 @@ router.post("/avanzar-etapa", async (req, res) => {
 
     } catch (error) {
         console.error("Error:", error);
+        const mensajeError = parseBlockchainError(error);
+
+        if (mensajeError.includes("Transición Inválida") || mensajeError.includes("Operación denegada")) {
+            let txHash = null;
+
+            try {
+                txHash = await registrarIntentoInvalidoEnBlockchain(idLoteBlockchain, etapa, mensajeError);
+            } catch (loggingError) {
+                console.error("No se pudo registrar el intento inválido en blockchain:", loggingError);
+            }
+
+            await registrarEventoHistorial({
+                blockchainId: idLoteBlockchain,
+                tipoEvento: "TRANSICION_INVALIDA",
+                etapa: ETAPAS[etapa] || String(etapa),
+                detalles: mensajeError,
+                txHash,
+            });
+        }
+
+        res.status(400).json({ success: false, error: mensajeError });
+    }
+});
+
+router.post("/registrar-intento-transicion", async (req, res) => {
+    const { idLoteBlockchain, etapaDestino, motivo } = req.body;
+
+    if (!idLoteBlockchain || etapaDestino === undefined) {
+        return res.status(400).json({ success: false, error: "Se requiere idLoteBlockchain y etapaDestino." });
+    }
+
+    try {
+        const detalle = motivo || `Intento de transición inválida hacia ${ETAPAS[etapaDestino] || etapaDestino}.`;
+        let txHash = null;
+
+        try {
+            txHash = await registrarIntentoInvalidoEnBlockchain(idLoteBlockchain, etapaDestino, detalle);
+        } catch (loggingError) {
+            console.error("No se pudo registrar el intento inválido en blockchain:", loggingError);
+        }
+
+        await registrarEventoHistorial({
+            blockchainId: idLoteBlockchain,
+            tipoEvento: "TRANSICION_INVALIDA",
+            etapa: ETAPAS[etapaDestino] || String(etapaDestino),
+            detalles: detalle,
+            txHash,
+        });
+
+        res.json({
+            success: true,
+            message: txHash
+                ? "Intento inválido registrado en auditoría y blockchain."
+                : "Intento inválido registrado en auditoría local.",
+            txHash,
+        });
+    } catch (error) {
+        console.error("Error al registrar intento inválido:", error);
         res.status(400).json({ success: false, error: parseBlockchainError(error) });
     }
 });
@@ -304,23 +481,15 @@ router.get("/auditar/:idSqlite", async (req, res) => {
 // OBTENER HISTORIAL DE UN LOTE (Línea de tiempo)
 router.get("/historial/:idLoteBlockchain", async (req, res) => {
     const { idLoteBlockchain } = req.params;
-    const historyDb = getHistoryDB(); // Usamos la base de datos exclusiva de auditoría
+    const historyDb = getHistoryDB();
 
     try {
-        // Buscamos todas las transiciones del lote, ordenadas cronológicamente
-        const historial = await historyDb.all(
-            `SELECT etapa, resultado, motivo, rendimiento, acidez, peroxidos, tx_hash, fecha_hora 
-             FROM transiciones 
-             WHERE blockchain_id = ? 
-             ORDER BY fecha_hora ASC`,
-            [idLoteBlockchain]
-        );
+        const historial = await obtenerHistorialUnificado(historyDb, idLoteBlockchain);
 
-        // Si el arreglo está vacío, significa que el lote recién se creó y no ha avanzado, o no existe
-        if (!historial || historial.length === 0) {
+        if (historial.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: "No se encontró historial de transiciones para este lote. Es posible que aún esté en Recepción."
+                message: "No se encontró historial para este lote. O no existe, o aún está en su etapa inicial."
             });
         }
 
@@ -336,6 +505,120 @@ router.get("/historial/:idLoteBlockchain", async (req, res) => {
             success: false,
             error: "Error interno al consultar la base de datos de auditoría."
         });
+    }
+});
+
+router.get("/historial-sqlite/:idSqlite", async (req, res) => {
+    const { idSqlite } = req.params;
+    const db = getDB();
+    const historyDb = getHistoryDB();
+
+    try {
+        const resolved = await obtenerBlockchainIdPorSqlite(db, idSqlite);
+        if (resolved.error) {
+            return res.status(404).json({ success: false, message: resolved.error });
+        }
+
+        const historial = await obtenerHistorialUnificado(historyDb, resolved.blockchainId);
+
+        if (historial.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No se encontró historial para este lote."
+            });
+        }
+
+        res.json({
+            success: true,
+            cantidadEventos: historial.length,
+            data: historial
+        });
+    } catch (error) {
+        console.error("❌ Error al consultar historial por id SQLite:", error);
+        res.status(500).json({
+            success: false,
+            error: "Error interno al consultar la base de datos de auditoría."
+        });
+    }
+});
+
+router.get("/historial/:idLoteBlockchain/export", async (req, res) => {
+    const { idLoteBlockchain } = req.params;
+    const historyDb = getHistoryDB();
+
+    try {
+        const historial = await obtenerHistorialUnificado(historyDb, idLoteBlockchain);
+
+        if (historial.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No se encontró historial para este lote."
+            });
+        }
+
+        const rows = historial.map((evento, index) => ({
+            orden: index + 1,
+            etapa: evento.etapa,
+            resultado: evento.resultado,
+            motivo: evento.motivo,
+            rendimiento: evento.rendimiento,
+            acidez: evento.acidez,
+            peroxidos: evento.peroxidos,
+            tx_hash: evento.tx_hash || "",
+            fecha_hora: evento.fecha_hora,
+        }));
+
+        const buffer = buildExcelBuffer({ sheetName: "HistorialLote", rows });
+        sendExcelFile(res, {
+            buffer,
+            fileName: `historial_lote_${idLoteBlockchain}.xlsx`
+        });
+    } catch (error) {
+        console.error("❌ Error al exportar historial de lote:", error);
+        res.status(500).json({ success: false, error: "Error interno al exportar historial de lote." });
+    }
+});
+
+router.get("/historial-sqlite/:idSqlite/export", async (req, res) => {
+    const { idSqlite } = req.params;
+    const db = getDB();
+    const historyDb = getHistoryDB();
+
+    try {
+        const resolved = await obtenerBlockchainIdPorSqlite(db, idSqlite);
+        if (resolved.error) {
+            return res.status(404).json({ success: false, message: resolved.error });
+        }
+
+        const historial = await obtenerHistorialUnificado(historyDb, resolved.blockchainId);
+
+        if (historial.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No se encontró historial para este lote."
+            });
+        }
+
+        const rows = historial.map((evento, index) => ({
+            orden: index + 1,
+            etapa: evento.etapa,
+            resultado: evento.resultado,
+            motivo: evento.motivo,
+            rendimiento: evento.rendimiento,
+            acidez: evento.acidez,
+            peroxidos: evento.peroxidos,
+            tx_hash: evento.tx_hash || "",
+            fecha_hora: evento.fecha_hora,
+        }));
+
+        const buffer = buildExcelBuffer({ sheetName: "HistorialLote", rows });
+        sendExcelFile(res, {
+            buffer,
+            fileName: `historial_lote_sqlite_${idSqlite}.xlsx`
+        });
+    } catch (error) {
+        console.error("❌ Error al exportar historial por id SQLite:", error);
+        res.status(500).json({ success: false, error: "Error interno al exportar historial de lote." });
     }
 });
 
@@ -374,31 +657,25 @@ router.get("/tablero", async (req, res) => {
 // GET: Historial de lotes (Paginado, búsqueda y últimos 3 años)
 router.get("/lotes", async (req, res) => {
     const { search = "", page = 1, limit = 10 } = req.query;
-    const offset = (page - 1) * limit;
     const db = getDB();
     const historyDb = getHistoryDB();
 
-    // Filtro: Últimos 3 años exactos desde hoy
-    const threeYearsAgo = new Date();
-    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
-    const dateLimit = threeYearsAgo.toISOString().split('T')[0];
-
-    let query = "SELECT id, codigo_lote as codigo, fecha_inicio as fechaRecepcion, variedad, peso_kg as kg, blockchain_id, hash_integridad, tx_creacion_hash, etapa_actual, estado FROM lotes WHERE fecha_inicio >= ?";
-    const params = [dateLimit];
-
-    if (search) {
-        query += " AND codigo_lote LIKE ?";
-        params.push(`%${search}%`);
-    }
+    const { query: queryBase, params: paramsBase } = construirConsultaLotes({
+        search,
+        incluirPaginacion: false,
+    });
 
     // Contar el total para la paginación
-    const countQuery = `SELECT COUNT(*) as total FROM (${query})`;
-    const totalRow = await db.get(countQuery, params);
+    const countQuery = `SELECT COUNT(*) as total FROM (${queryBase})`;
+    const totalRow = await db.get(countQuery, paramsBase);
     const total = totalRow ? totalRow.total : 0;
 
-    // Traer los datos
-    query += " ORDER BY fecha_inicio DESC LIMIT ? OFFSET ?";
-    params.push(Number(limit), Number(offset));
+    const { query, params } = construirConsultaLotes({
+        search,
+        incluirPaginacion: true,
+        page,
+        limit,
+    });
 
     const lotes = await db.all(query, params);
 
@@ -409,9 +686,10 @@ router.get("/lotes", async (req, res) => {
              FROM transiciones 
              WHERE blockchain_id = ? 
              ORDER BY fecha_hora ASC`,
-            [lote.blockchain_id]
+            [lote._blockchain_id]
         );
-        return { ...lote, historial: historial || [] };
+        const { _blockchain_id, ...publicLote } = lote;
+        return { ...publicLote, historial: historial || [] };
     }));
 
     res.json({
@@ -420,6 +698,56 @@ router.get("/lotes", async (req, res) => {
         page: Number(page),
         totalPages: Math.ceil(total / limit)
     });
+});
+
+router.get("/lotes/export", async (req, res) => {
+    const { search = "" } = req.query;
+    const db = getDB();
+    const historyDb = getHistoryDB();
+
+    try {
+        const { query, params } = construirConsultaLotes({
+            search,
+            incluirPaginacion: false,
+        });
+
+        const lotes = await db.all(query, params);
+
+        if (lotes.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No hay lotes para exportar con los filtros actuales."
+            });
+        }
+
+        const rows = await Promise.all(lotes.map(async (lote) => {
+            const eventos = lote._blockchain_id
+                ? await obtenerHistorialUnificado(historyDb, lote._blockchain_id)
+                : [];
+
+            return {
+                id_sqlite: lote.id,
+                codigo: lote.codigo,
+                fecha_recepcion: lote.fechaRecepcion,
+                variedad: lote.variedad,
+                kg: lote.kg,
+                etapa_actual: lote.etapa_actual,
+                estado: lote.estado,
+                hash_integridad: lote.hash_integridad || "",
+                tx_creacion_hash: lote.tx_creacion_hash || "",
+                cantidad_eventos_historial: eventos.length,
+            };
+        }));
+
+        const buffer = buildExcelBuffer({ sheetName: "Lotes", rows });
+        sendExcelFile(res, {
+            buffer,
+            fileName: "lotes_ultimos_3_anios.xlsx"
+        });
+    } catch (error) {
+        console.error("❌ Error al exportar lotes:", error);
+        res.status(500).json({ success: false, error: "Error interno al exportar lotes." });
+    }
 });
 
 

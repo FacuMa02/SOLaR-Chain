@@ -9,11 +9,13 @@ import NuevoRemito from "./pages/NuevoRemito";
 import ProcesoProductivo from "./pages/ProcesoProductivo";
 import Historial from "./pages/Historial";
 import ManualUsuario from "./pages/ManualUsuario";
+import GetRemitos from "./pages/GetRemitos";
 
 import Login from "./pages/Login";
 import Recover from "./pages/Recover";
 import CargarLote from "./pages/CargarLote";
 import CancelarLote from "./pages/CancelarLote";
+import * as remitosSvc from "./services/remitosService";
 
 import * as lotesSvc from "./services/lotesService";
 
@@ -32,7 +34,7 @@ function ProtectedLayout({ onLogout }) {
   );
 }
 
-function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote }) {
+function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateRemito }) {
   const nav = useNavigate();
   const doLogout = () => {
     sessionStorage.removeItem("solar_authed");
@@ -67,25 +69,28 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateLote
       <Route
         element={authed ? <ProtectedLayout onLogout={doLogout} /> : <Navigate to="/login" replace />}
       >
-        <Route index element={<Inicio lotes={lotes} />} />
-        <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateLote} toast={toast} />} />
+        <Route index element={<Inicio lotes={lotes} />} /><Route index element={<Inicio lotes={lotes} />} />
+        
+        {/* Rutas combinadas (Tuyas y de Daniel) */}
+        <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateRemito} toast={toast} />} />
         <Route path="/manual" element={<ManualUsuario />} />
+        <Route path="/remitos" element={<GetRemitos toast={toast} />} />
+        
         <Route path="/cargar-lote" element={<CargarLote toast={toast} />} />
         <Route path="/cancelar-lote" element={<CancelarLote toast={toast} />} />
-        <Route
-          path="/proceso"
-          element={<ProcesoProductivo toast={toast} />}
-        />
+        
+        <Route path="/proceso" element={<ProcesoProductivo lotes={lotes} setLotes={setLotes} toast={toast} />} />
         <Route path="/historial" element={<Historial toast={toast} />} />
         
         {/* RUTA PRIVADA: Para cambiar la contraseña desde el Topbar estando adentro */}
         <Route path="/cambiar-contrasena" element={<Recover toast={toast} />} />
       </Route>
-      
+
       {/* Fallback */}
       <Route path="*" element={<Navigate to={authed ? "/" : "/login"} replace />} />
     </Routes>
-  );
+
+      )
 }
 
 export default function App() {
@@ -118,35 +123,13 @@ export default function App() {
     _setLotes(next);
   }
 
-  // La pantalla de proceso ya no usa el mock; consulta directamente al backend.
-  const api = useMemo(() => {
-    return {
-      updateStage: (loteId, toIndex) => lotesSvc.updateLoteStageAsync(loteId, toIndex),
-    };
-  }, []);
-
-  async function onCreateLote(payload) {
-    // 1. Crear lote localmente
-    const { lote, lotes: next } = lotesSvc.createLote(payload);
-    setLotes(next);
-
-    // 2. Enviar al blockchain (en background)
-    try {
-      await lotesSvc.submitLoteToBlockchain(lote.id);
-      // Actualizar estado con el idBlockchain
-      const updated = lotesSvc.getLotes();
-      setLotes(updated);
-      toast.success("Lote enviado al blockchain");
-    } catch (err) {
-      console.error("Error enviando a blockchain:", err);
-      toast.error(`Lote creado pero no se pudo registrar en blockchain: ${err.message}`);
-    }
+  async function onCreateRemito(payload) {
+    await remitosSvc.createRemito(payload);
   }
 
   return (
     <BrowserRouter>
       <ToastHost toasts={toasts} />
-      <LogoutWrapper authed={authed} setAuthed={setAuthed} toast={toast} lotes={lotes} setLotes={setLotes} onCreateLote={onCreateLote} />
-    </BrowserRouter>
+      <LogoutWrapper authed={authed} setAuthed={setAuthed} toast={toast} lotes={lotes} setLotes={setLotes} onCreateRemito={onCreateRemito} />    </BrowserRouter>
   );
 }

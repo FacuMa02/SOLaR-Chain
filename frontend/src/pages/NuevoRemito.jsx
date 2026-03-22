@@ -65,9 +65,9 @@ export default function NuevoRemito({ onCreate, toast }) {
       });
 
       toast.success("Remito creado correctamente");
-      nav("/proceso");
+      nav("/remitos");
     } catch (err) {
-      toast.error(err?.message || "No se pudo crear el lote.");
+      toast.error(err?.message || "No se pudo crear el remito.");
     } finally {
       setSaving(false);
     }
@@ -219,7 +219,7 @@ export default function NuevoRemito({ onCreate, toast }) {
               Cancelar
             </button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? "Guardando..." : "Guardar lote"}
+              {saving ? "Guardando..." : "Guardar remito"}
             </button>
           </div>
         </form>

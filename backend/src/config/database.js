@@ -46,6 +46,19 @@ export async function initDB() {
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS remitos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha_recepcion TEXT NOT NULL,
+            productor TEXT NOT NULL,
+            origen TEXT NOT NULL,
+            estado TEXT NOT NULL,
+            contenedor_tipo TEXT NOT NULL,
+            contenedor_cantidad INTEGER NOT NULL,
+            variedad TEXT NOT NULL,
+            kg REAL NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
     `);
 
     await dbInstance.exec(`
