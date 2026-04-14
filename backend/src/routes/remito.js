@@ -102,15 +102,11 @@ router.post("/", async (req, res) => {
         await db.exec("BEGIN TRANSACTION");
 
         const nroRemito = `REM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const createdAt = new Date().toISOString();
 
         const insertResult = await db.run(
             `INSERT INTO remitos (
 				nro_remito,
-				nombre_productor,
-				origen_materia_prima,
-				tipo_almacenamiento,
-				modalidad_cobro,
-				peso,
 				fecha_recepcion,
 				productor,
 				origen,
@@ -118,15 +114,11 @@ router.post("/", async (req, res) => {
 				contenedor_tipo,
 				contenedor_cantidad,
 				variedad,
-				kg
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+				kg,
+				created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
             [
                 nroRemito,
-                String(productor).trim(),
-                String(origen).trim(),
-                String(contenedorTipo).trim(),
-                String(estado).trim(),
-                kgValue,
                 fechaRecepcion,
                 String(productor).trim(),
                 String(origen).trim(),
@@ -135,6 +127,7 @@ router.post("/", async (req, res) => {
                 contenedorCantidadValue,
                 String(variedad).trim(),
                 kgValue,
+                createdAt,
             ]
         );
 

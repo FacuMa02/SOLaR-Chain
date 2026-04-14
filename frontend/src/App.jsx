@@ -10,6 +10,7 @@ import ProcesoProductivo from "./pages/ProcesoProductivo";
 import Historial from "./pages/Historial";
 import ManualUsuario from "./pages/ManualUsuario";
 import GetRemitos from "./pages/GetRemitos";
+import DashboardAnaliticas from "./pages/DashboardAnaliticas";
 
 import Login from "./pages/Login";
 import Recover from "./pages/Recover";
@@ -69,9 +70,9 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateRemi
       <Route
         element={authed ? <ProtectedLayout onLogout={doLogout} /> : <Navigate to="/login" replace />}
       >
-        <Route index element={<Inicio lotes={lotes} />} /><Route index element={<Inicio lotes={lotes} />} />
-        
-        {/* Rutas combinadas (Tuyas y de Daniel) */}
+          <Route index element={<Inicio lotes={lotes} />} />        
+    
+        <Route path="/dashboard" element={<DashboardAnaliticas />} />
         <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateRemito} toast={toast} />} />
         <Route path="/manual" element={<ManualUsuario />} />
         <Route path="/remitos" element={<GetRemitos toast={toast} />} />

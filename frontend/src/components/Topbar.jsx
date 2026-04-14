@@ -48,9 +48,12 @@ export default function Topbar({ onLogout }) {
         <div className="flex items-center gap-3">
           
           <div className="tabs">
-            <NavLink to="/" className={tabClass} end>
+        <NavLink to="/" className={tabClass} end>
               Inicio
-            </NavLink>
+        </NavLink>
+        <NavLink to="/dashboard" className={tabClass}>
+          Dashboard
+        </NavLink>
         <NavLink to="/nuevo-lote" className={tabClass}>
           Nuevo lote
         </NavLink>
@@ -216,7 +219,7 @@ export default function Topbar({ onLogout }) {
             <h3 className="font-bold text-xl">SOLaR-Chain</h3>
           </div>
 
-          {/* Caja interior de información (Fondo ligeramente diferente) */}
+          {/* Caja interior de información (fondo diferente) */}
           <div className="p-6 bg-base-200/50">
             <div className="flex items-start gap-4">
               {/* Ícono de Check de actualización */}
