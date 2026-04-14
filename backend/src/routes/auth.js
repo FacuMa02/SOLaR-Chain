@@ -6,43 +6,50 @@ import crypto from "crypto";
 import argon2 from "argon2";
 import { getDB } from "../config/database.js";
 
-// initialize dotenv early, just in case
 dotenv.config();
 
-// express setup
 const router = express.Router();
 router.use(express.json());
 router.use(cookieParser());
 router.use(cors({ origin: "http://localhost:5173", credentials: true }));
 
-// -------------------- helpers --------------------
+/* Obtiene un valor de configuración del sistema a partir de su clave. */
 async function getSetting(key) {
-    const row = await getDB().get("SELECT value FROM settings WHERE key = ?", [key]);
+    const db = getDB();
+    await db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
+    const row = await db.get("SELECT value FROM settings WHERE key = ?", [key]);
     return row ? row.value : null;
 }
 
+/* Almacena o modifica un valor de configuración clave-valor en el sistema. */
 async function setSetting(key, value) {
-    await getDB().run(
+    const db = getDB();
+    await db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
+    await db.run(
         "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         [key, value]
     );
 }
 
+/* Verifica si el usuario administrador y la clave maestra ya fueron registrados en la base de datos. */
 async function isInitialized() {
-    const user = await getDB().get("SELECT * FROM users WHERE username='admin'");
+    const user = await getDB().get("SELECT * FROM users WHERE dni='admin'");
     const master = await getSetting("master_key_hash");
     return !!user && !!master;
 }
 
+/* Genera una cadena criptográfica aleatoria para ser utilizada como token de sesión. */
 function createToken() {
     return crypto.randomBytes(32).toString("hex");
 }
 
+/* Elimina todas las sesiones activas en la base de datos y limpia la cookie del cliente. */
 async function clearSessions(res) {
     await getDB().run("DELETE FROM sessions");
     res.clearCookie("session");
 }
 
+/* Middleware que intercepta las peticiones HTTP para verificar la existencia y validez del token de sesión. */
 async function requireAuth(req, res, next) {
     const token = req.cookies.session;
     if (!token) return res.status(401).json({ error: "No autenticado" });
@@ -53,7 +60,6 @@ async function requireAuth(req, res, next) {
     next();
 }
 
-// -------------------- routes --------------------
 router.get("/status", async (req, res) => {
     res.json({ initialized: await isInitialized(), user: "admin" });
 });
@@ -68,8 +74,12 @@ router.post("/init", async (req, res) => {
 
     const masterHash = await argon2.hash(String(masterKey));
     const passHash = await argon2.hash(String(adminPassword));
+    const createdAt = new Date().toISOString();
 
-    await getDB().run("INSERT INTO users (username, password_hash) VALUES ('admin', ?)", [passHash]);
+    await getDB().run(
+        "INSERT INTO users (dni, password_hash, created_at) VALUES ('admin', ?, ?)",
+        [passHash, createdAt]
+    );
     await setSetting("master_key_hash", masterHash);
 
     await clearSessions(res);
@@ -82,13 +92,18 @@ router.post("/login", async (req, res) => {
 
     if (!(await isInitialized())) return res.status(400).json({ error: "No inicializado. Usá /auth/init" });
 
-    const user = await getDB().get("SELECT * FROM users WHERE username='admin'");
+    const user = await getDB().get("SELECT * FROM users WHERE dni='admin'");
     const ok = await argon2.verify(user.password_hash, String(password));
     if (!ok) return res.status(401).json({ error: "Contraseña incorrecta" });
 
     const token = createToken();
+    const fechaCreacion = new Date().toISOString();
+
     await getDB().run("DELETE FROM sessions");
-    await getDB().run("INSERT INTO sessions (token) VALUES (?)", [token]);
+    await getDB().run(
+        "INSERT INTO sessions (token, fecha_creacion) VALUES (?, ?)",
+        [token, fechaCreacion]
+    );
 
     res.cookie("session", token, { httpOnly: true, sameSite: "lax" });
     res.json({ ok: true });
@@ -118,15 +133,14 @@ router.post("/recover", async (req, res) => {
     if (!ok) return res.status(401).json({ error: "Clave maestra incorrecta" });
 
     const newHash = await argon2.hash(String(newPassword));
-    await getDB().run("UPDATE users SET password_hash=? WHERE username='admin'", [newHash]);
+    await getDB().run("UPDATE users SET password_hash=? WHERE dni='admin'", [newHash]);
 
     await clearSessions(res);
     res.json({ ok: true });
 });
 
-// ⚠️ ENDPOINT DE DEBUG: Ver estado de autenticación (solo desarrollo)
 router.get("/debug-status", async (req, res) => {
-    const user = await getDB().get("SELECT username FROM users WHERE username='admin'");
+    const user = await getDB().get("SELECT dni FROM users WHERE dni='admin'");
     const masterHashExists = await getSetting("master_key_hash");
     const sessionCount = await getDB().get("SELECT COUNT(*) as count FROM sessions");
 
