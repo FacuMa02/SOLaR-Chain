@@ -10,7 +10,7 @@ router.get("/", async (_req, res) => {
     try {
         const remitos = await db.all(
             `SELECT
-				id,
+                rowid AS id,
 				fecha_recepcion AS fechaRecepcion,
 				productor,
 				origen,
@@ -41,7 +41,7 @@ router.get("/:id", async (req, res) => {
     try {
         const remito = await db.get(
             `SELECT
-				id,
+                rowid AS id,
 				fecha_recepcion AS fechaRecepcion,
 				productor,
 				origen,
@@ -52,7 +52,7 @@ router.get("/:id", async (req, res) => {
 				kg,
 				created_at AS createdAt
 			FROM remitos
-			WHERE id = ?`,
+			WHERE rowid = ?`,
             [remitoId]
         );
 
@@ -101,8 +101,16 @@ router.post("/", async (req, res) => {
     try {
         await db.exec("BEGIN TRANSACTION");
 
+        const nroRemito = `REM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
         const insertResult = await db.run(
             `INSERT INTO remitos (
+				nro_remito,
+				nombre_productor,
+				origen_materia_prima,
+				tipo_almacenamiento,
+				modalidad_cobro,
+				peso,
 				fecha_recepcion,
 				productor,
 				origen,
@@ -111,8 +119,14 @@ router.post("/", async (req, res) => {
 				contenedor_cantidad,
 				variedad,
 				kg
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
             [
+                nroRemito,
+                String(productor).trim(),
+                String(origen).trim(),
+                String(contenedorTipo).trim(),
+                String(estado).trim(),
+                kgValue,
                 fechaRecepcion,
                 String(productor).trim(),
                 String(origen).trim(),
@@ -138,7 +152,7 @@ router.post("/", async (req, res) => {
 
         const remito = await db.get(
             `SELECT
-				id,
+                rowid AS id,
 				fecha_recepcion AS fechaRecepcion,
 				productor,
 				origen,
@@ -149,7 +163,7 @@ router.post("/", async (req, res) => {
 				kg,
 				created_at AS createdAt
 			FROM remitos
-			WHERE id = ?`,
+			WHERE rowid = ?`,
             [insertResult.lastID]
         );
 

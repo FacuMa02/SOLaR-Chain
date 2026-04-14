@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import * as api from "../services/apiClient"; // Asegúrate de que esta ruta sea la correcta
 
 const ESTADOS = ["buena", "regular", "mala"];
 const TIPOS = ["Cajones", "Bolsas"];
@@ -21,16 +22,36 @@ export default function NuevoRemito({ onCreate, toast }) {
   const [estado, setEstado] = useState("");
   const [contenedorTipo, setContenedorTipo] = useState("Cajones");
   const [contenedorCantidad, setContenedorCantidad] = useState(1);
-  const [variedad, setVariedad] = useState("Mezcla");
+  const [idVariedad, setIdVariedad] = useState(""); // Ahora guarda el ID numérico
   const [kg, setKg] = useState("");
+
+  // Estados para el catálogo de variedades
+  const [variedadesDb, setVariedadesDb] = useState([]);
+  const [loadingVariedades, setLoadingVariedades] = useState(true);
 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
+  // Cargar variedades dinámicamente
+  useEffect(() => {
+    async function fetchVariedades() {
+      try {
+        const res = await api.get("/lotes/variedades");
+        if (res.success) {
+          setVariedadesDb(res.data);
+        }
+      } catch (error) {
+        toast.error("Error al cargar el catálogo de variedades.");
+      } finally {
+        setLoadingVariedades(false);
+      }
+    }
+    fetchVariedades();
+  }, [toast]);
+
   const resumenContenedor = useMemo(() => {
     const n = Number(contenedorCantidad || 0);
     if (!Number.isFinite(n) || n <= 0) return "—";
-    // ejemplo visual: 9B si tipo Bolsas, 9C si Cajones
     const suf = contenedorTipo === "Bolsas" ? "B" : "C";
     return `${n}${suf}`;
   }, [contenedorCantidad, contenedorTipo]);
@@ -41,6 +62,7 @@ export default function NuevoRemito({ onCreate, toast }) {
     if (!productor.trim()) e.productor = "Productor obligatorio";
     if (!origen.trim()) e.origen = "Origen obligatorio";
     if (!estado) e.estado = "Estado obligatorio";
+    if (!idVariedad) e.idVariedad = "Variedad obligatoria"; // Nueva validación
     const kgN = Number(kg);
     if (!Number.isFinite(kgN) || kgN <= 0) e.kg = "KG debe ser > 0";
     setErrors(e);
@@ -53,15 +75,21 @@ export default function NuevoRemito({ onCreate, toast }) {
 
     setSaving(true);
     try {
+      const variedadSeleccionada = variedadesDb.find((v) => String(v.id) === String(idVariedad));
+      if (!variedadSeleccionada?.nombre) {
+        throw new Error("Variedad inválida. Volvé a seleccionar una opción.");
+      }
+
       await onCreate({
         fechaRecepcion,
         productor,
         origen,
         estado,
         contenedorTipo,
-        contenedorCantidad,
-        variedad,
-        kg,
+        contenedorCantidad: Number(contenedorCantidad),
+        variedad: variedadSeleccionada.nombre,
+        idVariedad: Number(idVariedad),
+        kg: Number(kg),
       });
 
       toast.success("Remito creado correctamente");
@@ -78,7 +106,7 @@ export default function NuevoRemito({ onCreate, toast }) {
       <div className="bg-base-100 rounded-2xl shadow p-5 space-y-5">
         <div>
           <h1 className="text-xl font-semibold">Nuevo Remito</h1>
-          <p className="text-sm text-base-content/70">Descripción</p>
+          <p className="text-sm text-base-content/70">Ingrese los datos de la materia prima recibida</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -183,14 +211,26 @@ export default function NuevoRemito({ onCreate, toast }) {
 
             <div className="form-control">
               <label className="label">
-                <span className="label-text">Variedad</span>
+                <span className="label-text">Variedad *</span>
               </label>
-              <input
-                className="input input-bordered"
-                value={variedad}
-                onChange={(e) => setVariedad(e.target.value)}
-                placeholder="Ej: Mezcla"
-              />
+              <select
+                className={`select select-bordered w-full ${errors.idVariedad ? "select-error" : ""}`}
+                value={idVariedad}
+                onChange={(e) => setIdVariedad(e.target.value)}
+                disabled={loadingVariedades}
+              >
+                <option value="">
+                  {loadingVariedades ? "Cargando catálogos..." : "Seleccione una variedad..."}
+                </option>
+                {variedadesDb.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nombre}
+                  </option>
+                ))}
+              </select>
+              {errors.idVariedad && (
+                <span className="text-xs text-error mt-1">{errors.idVariedad}</span>
+              )}
             </div>
 
             <div className="form-control">

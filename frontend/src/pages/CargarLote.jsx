@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../services/apiClient";
 
@@ -7,17 +7,38 @@ export default function CargarLote({ toast }) {
 
   const [codigoLote, setCodigoLote] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
-  const [variedad, setVariedad] = useState("");
+  const [idVariedad, setIdVariedad] = useState("");
   const [pesoKg, setPesoKg] = useState("");
+
+  // Nuevos estados para el renderizado dinámico
+  const [variedadesDb, setVariedadesDb] = useState([]);
+  const [loadingVariedades, setLoadingVariedades] = useState(true);
 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+
+  // Hook para traer los catálogos al cargar la pantalla
+  useEffect(() => {
+    async function fetchVariedades() {
+      try {
+        const res = await api.get("/lotes/variedades");
+        if (res.success) {
+          setVariedadesDb(res.data);
+        }
+      } catch (error) {
+        toast.error("Error al cargar el catálogo de variedades.");
+      } finally {
+        setLoadingVariedades(false);
+      }
+    }
+    fetchVariedades();
+  }, [toast]);
 
   function validate() {
     const e = {};
     if (!codigoLote.trim()) e.codigoLote = "Código obligatorio";
     if (!fechaInicio) e.fechaInicio = "Fecha obligatoria";
-    if (!variedad.trim()) e.variedad = "Variedad obligatoria";
+    if (!idVariedad) e.idVariedad = "Variedad obligatoria";
     const pesoN = Number(pesoKg);
     if (!Number.isFinite(pesoN) || pesoN <= 0) e.pesoKg = "KG debe ser > 0";
     setErrors(e);
@@ -33,11 +54,11 @@ export default function CargarLote({ toast }) {
       const body = {
         codigoLote: codigoLote.trim(),
         fechaInicio,
-        variedad: variedad.trim(),
+        idVariedad: Number(idVariedad),
         pesoKg: Number(pesoKg),
       };
 
-      const res = await api.post("/lotes/crear-lote", body);
+      await api.post("/lotes/crear-lote", body);
 
       toast.success("Lote creado correctamente");
       nav("/");
@@ -92,14 +113,24 @@ export default function CargarLote({ toast }) {
               <label className="label">
                 <span className="label-text">Variedad de Aceituna *</span>
               </label>
-              <input
-                className={`input input-bordered ${errors.variedad ? "input-error" : ""}`}
-                value={variedad}
-                onChange={(e) => setVariedad(e.target.value)}
-                placeholder="Ej: Arauco"
-              />
-              {errors.variedad && (
-                <span className="text-xs text-error mt-1">{errors.variedad}</span>
+              <select
+                className={`select select-bordered w-full ${errors.idVariedad ? "select-error" : ""}`}
+                value={idVariedad}
+                onChange={(e) => setIdVariedad(e.target.value)}
+                disabled={loadingVariedades}
+              >
+                <option value="">
+                  {loadingVariedades ? "Cargando catálogos..." : "Seleccione una variedad..."}
+                </option>
+                {/* Renderizado dinámico leyendo del estado */}
+                {variedadesDb.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nombre}
+                  </option>
+                ))}
+              </select>
+              {errors.idVariedad && (
+                <span className="text-xs text-error mt-1">{errors.idVariedad}</span>
               )}
             </div>
 
