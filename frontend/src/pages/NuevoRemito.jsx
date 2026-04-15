@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../services/apiClient"; // Asegúrate de que esta ruta sea la correcta
+import { getRemitosCatalogos } from "../services/remitosService";
+import MemoryInput from "../components/MemoryInput";
 
 const ESTADOS = ["buena", "regular", "mala"];
 const TIPOS = ["Cajones", "Bolsas"];
@@ -28,6 +30,8 @@ export default function NuevoRemito({ onCreate, toast }) {
   // Estados para el catálogo de variedades
   const [variedadesDb, setVariedadesDb] = useState([]);
   const [loadingVariedades, setLoadingVariedades] = useState(true);
+  const [productoresDb, setProductoresDb] = useState([]);
+  const [origenesDb, setOrigenesDb] = useState([]);
 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -47,6 +51,20 @@ export default function NuevoRemito({ onCreate, toast }) {
       }
     }
     fetchVariedades();
+  }, [toast]);
+
+  useEffect(() => {
+    async function fetchCatalogosRemitos() {
+      try {
+        const data = await getRemitosCatalogos();
+        setProductoresDb(data.productores || []);
+        setOrigenesDb(data.origenes || []);
+      } catch (error) {
+        toast.error("Error al cargar sugerencias de productor y origen.");
+      }
+    }
+
+    fetchCatalogosRemitos();
   }, [toast]);
 
   const resumenContenedor = useMemo(() => {
@@ -121,6 +139,9 @@ export default function NuevoRemito({ onCreate, toast }) {
                 value={fechaRecepcion}
                 onChange={(e) => setFechaRecepcion(e.target.value)}
               />
+              <span className="text-xs text-base-content/60 mt-1">
+                La hora se registra automáticamente al crear el remito.
+              </span>
               {errors.fechaRecepcion && (
                 <span className="text-xs text-error mt-1">{errors.fechaRecepcion}</span>
               )}
@@ -130,11 +151,13 @@ export default function NuevoRemito({ onCreate, toast }) {
               <label className="label">
                 <span className="label-text">Productor *</span>
               </label>
-              <input
-                className={`input input-bordered ${errors.productor ? "input-error" : ""}`}
+              <MemoryInput
                 value={productor}
-                onChange={(e) => setProductor(e.target.value)}
+                onValueChange={setProductor}
+                options={productoresDb}
                 placeholder="Ej: Finca Don José"
+                error={errors.productor}
+                emptyMessage="No hay productores previos que coincidan."
               />
               {errors.productor && (
                 <span className="text-xs text-error mt-1">{errors.productor}</span>
@@ -145,11 +168,13 @@ export default function NuevoRemito({ onCreate, toast }) {
               <label className="label">
                 <span className="label-text">Origen *</span>
               </label>
-              <input
-                className={`input input-bordered ${errors.origen ? "input-error" : ""}`}
+              <MemoryInput
                 value={origen}
-                onChange={(e) => setOrigen(e.target.value)}
+                onValueChange={setOrigen}
+                options={origenesDb}
                 placeholder="Ej: Arauco / Chilecito"
+                error={errors.origen}
+                emptyMessage="No hay orígenes previos que coincidan."
               />
               {errors.origen && (
                 <span className="text-xs text-error mt-1">{errors.origen}</span>
