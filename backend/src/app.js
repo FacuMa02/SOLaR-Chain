@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { initDB } from "./config/database.js";
 import { initHistoryDB } from "./config/history_db.js";
@@ -8,10 +9,12 @@ import authRoutes from "./routes/auth.js";
 import loteRoutes from "./routes/lote.js";
 import remitoRoutes from "./routes/remito.js";
 import analiticasRoutes from "./routes/analiticas.js";
+import requireAuth from "./middleware/requireAuth.js";
 
 dotenv.config();
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 app.use(cors({
     origin: "http://localhost:5173",
     credentials: true,
@@ -30,9 +33,9 @@ async function startServer() {
 
         // 2. REGISTRAR LAS RUTAS DESPUÉS
         app.use('/api/auth', authRoutes); // Asegúrate de que el nombre coincida con tu importación
-        app.use('/api/lotes', loteRoutes);
-        app.use('/api/remitos', remitoRoutes);
-        app.use("/api/analiticas", analiticasRoutes);
+        app.use('/api/lotes', requireAuth, loteRoutes);
+        app.use('/api/remitos', requireAuth, remitoRoutes);
+        app.use("/api/analiticas", requireAuth, analiticasRoutes);
 
         // 3. LEVANTAR EL SERVIDOR AL FINAL
         const PORT = process.env.PORT || 3000;

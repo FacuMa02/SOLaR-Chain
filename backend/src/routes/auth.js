@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import crypto from "crypto";
 import argon2 from "argon2";
 import { getDB } from "../config/database.js";
+import requireAuth from "../middleware/requireAuth.js";
 
 dotenv.config();
 
@@ -47,17 +48,6 @@ function createToken() {
 async function clearSessions(res) {
     await getDB().run("DELETE FROM sessions");
     res.clearCookie("session");
-}
-
-/* Middleware que intercepta las peticiones HTTP para verificar la existencia y validez del token de sesión. */
-async function requireAuth(req, res, next) {
-    const token = req.cookies.session;
-    if (!token) return res.status(401).json({ error: "No autenticado" });
-
-    const s = await getDB().get("SELECT * FROM sessions WHERE token = ?", [token]);
-    if (!s) return res.status(401).json({ error: "Sesión inválida" });
-
-    next();
 }
 
 router.get("/status", async (req, res) => {
@@ -139,7 +129,7 @@ router.post("/recover", async (req, res) => {
     res.json({ ok: true });
 });
 
-router.get("/debug-status", async (req, res) => {
+router.get("/debug-status", requireAuth, async (req, res) => {
     const user = await getDB().get("SELECT dni FROM users WHERE dni='admin'");
     const masterHashExists = await getSetting("master_key_hash");
     const sessionCount = await getDB().get("SELECT COUNT(*) as count FROM sessions");

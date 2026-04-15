@@ -19,6 +19,7 @@ import CancelarLote from "./pages/CancelarLote";
 import * as remitosSvc from "./services/remitosService";
 
 import * as lotesSvc from "./services/lotesService";
+import * as api from "./services/apiClient";
 
 function uid() {
   return crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random()}`;
@@ -111,6 +112,28 @@ export default function App() {
 
   // Auth (session local) --------
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("solar_authed") === "1");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkSession() {
+      if (!authed) return;
+
+      try {
+        await api.get("/auth/me");
+      } catch {
+        if (cancelled) return;
+        sessionStorage.removeItem("solar_authed");
+        setAuthed(false);
+      }
+    }
+
+    checkSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
 
   // -------- Lotes (LocalStorage) ------
   // seguiremos guardando datos locales para otras pantallas (Inicio, etc.)
