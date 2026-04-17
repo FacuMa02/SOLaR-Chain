@@ -4,6 +4,33 @@ import { getDB } from "../config/database.js";
 
 const router = express.Router();
 
+function normalizeFechaRecepcion(fechaRecepcion) {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+
+    const raw = String(fechaRecepcion || "").trim();
+    if (!raw) {
+        return now.toISOString();
+    }
+
+    const explicitDateMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (explicitDateMatch) {
+        return `${explicitDateMatch[1]}T${hh}:${mm}:${ss}`;
+    }
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+        return now.toISOString();
+    }
+
+    const yyyy = String(parsed.getFullYear());
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const dd = String(parsed.getDate()).padStart(2, "0");
+    return `${yyyy}-${month}-${dd}T${hh}:${mm}:${ss}`;
+}
+
 router.get("/", async (_req, res) => {
     const db = getDB();
 
@@ -27,6 +54,37 @@ router.get("/", async (_req, res) => {
         return res.json({ success: true, data: remitos });
     } catch (error) {
         return res.status(500).json({ success: false, error: "No se pudieron obtener los remitos." });
+    }
+});
+
+router.get("/catalogos", async (_req, res) => {
+    const db = getDB();
+
+    try {
+        const [productoresRows, origenesRows] = await Promise.all([
+            db.all(
+                `SELECT DISTINCT TRIM(productor) AS value
+                FROM remitos
+                WHERE TRIM(COALESCE(productor, '')) <> ''
+                ORDER BY value COLLATE NOCASE ASC`
+            ),
+            db.all(
+                `SELECT DISTINCT TRIM(origen) AS value
+                FROM remitos
+                WHERE TRIM(COALESCE(origen, '')) <> ''
+                ORDER BY value COLLATE NOCASE ASC`
+            ),
+        ]);
+
+        return res.json({
+            success: true,
+            data: {
+                productores: productoresRows.map((row) => row.value),
+                origenes: origenesRows.map((row) => row.value),
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: "No se pudieron obtener los catálogos de remitos." });
     }
 });
 
@@ -103,6 +161,7 @@ router.post("/", async (req, res) => {
 
         const nroRemito = `REM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         const createdAt = new Date().toISOString();
+        const fechaRecepcionNormalized = normalizeFechaRecepcion(fechaRecepcion);
 
         const insertResult = await db.run(
             `INSERT INTO remitos (
@@ -119,7 +178,7 @@ router.post("/", async (req, res) => {
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
             [
                 nroRemito,
-                fechaRecepcion,
+                fechaRecepcionNormalized,
                 String(productor).trim(),
                 String(origen).trim(),
                 String(estado).trim(),

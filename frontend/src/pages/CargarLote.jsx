@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../services/apiClient";
+import LoteCodeInput, { buildCodigoLote } from "../components/LoteCodeInput";
 
 export default function CargarLote({ toast }) {
   const nav = useNavigate();
@@ -52,7 +53,7 @@ export default function CargarLote({ toast }) {
     setSaving(true);
     try {
       const body = {
-        codigoLote: codigoLote.trim(),
+        codigoLote: buildCodigoLote(codigoLote),
         fechaInicio,
         idVariedad: Number(idVariedad),
         pesoKg: Number(pesoKg),
@@ -79,20 +80,7 @@ export default function CargarLote({ toast }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Código de lote *</span>
-              </label>
-              <input
-                className={`input input-bordered ${errors.codigoLote ? "input-error" : ""}`}
-                value={codigoLote}
-                onChange={(e) => setCodigoLote(e.target.value)}
-                placeholder="Ej: LOT-2026-001"
-              />
-              {errors.codigoLote && (
-                <span className="text-xs text-error mt-1">{errors.codigoLote}</span>
-              )}
-            </div>
+            <LoteCodeInput value={codigoLote} onChange={setCodigoLote} error={errors.codigoLote} />
 
             <div className="form-control">
               <label className="label">

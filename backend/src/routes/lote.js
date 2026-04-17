@@ -326,6 +326,31 @@ router.get("/variedades", async (req, res) => {
     }
 });
 
+router.get("/motivos-cancelacion", async (_req, res) => {
+    const historyDb = getHistoryDB();
+
+    try {
+        const rows = await historyDb.all(
+            `SELECT DISTINCT TRIM(detalles) AS motivo
+             FROM historial_eventos
+             WHERE TRIM(COALESCE(detalles, '')) <> ''
+               AND id_tipo_evento = 3
+               AND id_estado_resultado = 3
+             ORDER BY fecha_registro DESC
+             LIMIT 100`
+        );
+
+        res.json({
+            success: true,
+            data: {
+                motivos: rows.map((row) => row.motivo),
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Error al obtener motivos de cancelación." });
+    }
+});
+
 
 /* * Ejecuta la transacción para inutilizar un lote en el contrato y actualiza las bases de datos a estado CANCELADO (ID 3).
  */

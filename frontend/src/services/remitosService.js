@@ -8,6 +8,14 @@ export async function getRemitos() {
     return response.data || [];
 }
 
+export async function getRemitosCatalogos() {
+    const response = await api.get("/remitos/catalogos");
+    if (!response.success) {
+        throw new Error(response.error || response.message || "No se pudieron obtener los catálogos de remitos.");
+    }
+    return response.data || { productores: [], origenes: [] };
+}
+
 export async function getRemitoById(id) {
     const response = await api.get(`/remitos/${id}`);
     if (!response.success) {

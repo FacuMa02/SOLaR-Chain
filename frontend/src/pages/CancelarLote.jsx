@@ -1,15 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../services/apiClient";
+import LoteCodeInput, { buildCodigoLote } from "../components/LoteCodeInput";
+import MemoryInput from "../components/MemoryInput";
 
 export default function CancelarLote({ toast }) {
   const nav = useNavigate();
 
   const [codigoLote, setCodigoLote] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [motivosDb, setMotivosDb] = useState([]);
 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    async function fetchMotivos() {
+      try {
+        const res = await api.get("/lotes/motivos-cancelacion");
+        if (res.success) {
+          setMotivosDb(res.data?.motivos || []);
+        }
+      } catch {
+        // Si no hay historial previo, el campo sigue funcionando como input libre.
+      }
+    }
+
+    fetchMotivos();
+  }, []);
 
   function validate() {
     const e = {};
@@ -26,11 +44,11 @@ export default function CancelarLote({ toast }) {
     setSaving(true);
     try {
       const body = {
-        codigoLote: codigoLote.trim(),
+        codigoLote: buildCodigoLote(codigoLote),
         motivo: motivo.trim(),
       };
 
-      const res = await api.post("/lotes/cancelar-lote", body);
+      await api.post("/lotes/cancelar-lote", body);
 
       toast.success("Lote cancelado correctamente");
       nav("/");
@@ -51,30 +69,20 @@ export default function CancelarLote({ toast }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Código de lote *</span>
-              </label>
-              <input
-                className={`input input-bordered ${errors.codigoLote ? "input-error" : ""}`}
-                value={codigoLote}
-                onChange={(e) => setCodigoLote(e.target.value)}
-                placeholder="Ej: LOT-2026-001"
-              />
-              {errors.codigoLote && (
-                <span className="text-xs text-error mt-1">{errors.codigoLote}</span>
-              )}
-            </div>
+            <LoteCodeInput value={codigoLote} onChange={setCodigoLote} error={errors.codigoLote} />
 
             <div className="form-control">
               <label className="label">
                 <span className="label-text">Motivo *</span>
               </label>
-              <input
-                className={`input input-bordered ${errors.motivo ? "input-error" : ""}`}
+              <MemoryInput
                 value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
+                onValueChange={setMotivo}
+                options={motivosDb}
                 placeholder="Ej: Defecto en calidad"
+                error={errors.motivo}
+                title="Motivos previos"
+                emptyMessage="No hay motivos previos que coincidan."
               />
               {errors.motivo && (
                 <span className="text-xs text-error mt-1">{errors.motivo}</span>
