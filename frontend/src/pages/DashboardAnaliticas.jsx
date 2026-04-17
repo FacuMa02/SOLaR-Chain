@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import * as api from "../services/apiClient";
 
 // --- COMPONENTE AUXILIAR PARA TARJETAS KPI (Versión Robustecida) ---
 const KpiCard = ({ title, value, unit, iconColor, icon }) => {
@@ -30,9 +31,7 @@ const DashboardAnaliticas = () => {
   useEffect(() => {
     const obtenerDatos = async () => {
       try {
-        const respuesta = await fetch('http://localhost:3001/api/analiticas');
-        if (!respuesta.ok) throw new Error('Error en la comunicación con el servidor.');
-        const json = await respuesta.json();
+        const json = await api.get('/analiticas');
         setData(json);
       } catch (err) {
         setError(err.message);
