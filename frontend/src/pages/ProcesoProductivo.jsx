@@ -155,11 +155,11 @@ export default function ProcesoProductivo({ toast }) {
         </div>
 
         <div className="flex-1 min-h-0 overflow-x-auto">
-          <div className="flex gap-3 w-max">
+          <div className="flex gap-3 w-max h-full pb-2">
             {STAGES.map((stageName, idx) => (
               <div
                 key={stageName}
-                className="w-[320px] shrink-0 bg-base-200 rounded-2xl p-3 flex flex-col"
+                className="w-[320px] shrink-0 bg-base-200 rounded-2xl p-3 flex flex-col h-full"
                 onDragOver={onDragOver}
                 onDrop={(e) => onDrop(e, idx)}
               >

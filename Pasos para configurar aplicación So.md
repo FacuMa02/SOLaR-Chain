@@ -1,102 +1,118 @@
-# 🌿 Sistema de Trazabilidad Almazara 4.0 - Blockchain & IoT
+# 🌿 Guía de Inicialización: Sistema de Trazabilidad Almazara 4.0 - Blockchain & IoT
 
-Este proyecto es una plataforma de trazabilidad para la industria del aceite de oliva, utilizando Blockchain (Ethereum/Hardhat) para garantizar la inmutabilidad de los datos y SQLite para la gestión operativa y de auditoría.
+El presente documento detalla el procedimiento oficial requerido para la configuración e inicialización de la plataforma de trazabilidad basada en tecnología Blockchain y bases de datos híbridas.
 
 ## 🛠️ Requisitos Previos
 
-Node.js (v18 o superior)
+Para la correcta ejecución del sistema, es obligatoria la instalación previa del siguiente software en el entorno de desarrollo:
 
-Git
+- Node.js (v18 o superior)
+- Git
+- Ganache (Interfaz gráfica o CLI)
+- Hardhat (Incluido dentro de las dependencias del proyecto)
 
-Hardhat (incluido en las dependencias del proyecto)
+---
 
 ## 🚀 Configuración del Entorno
 
-1. Clonar y Preparar el Repositorio
-   Primero, descargá el código en tu computadora e ingresá a la carpeta del proyecto:
+### Paso 1: Clonación y Preparación del Repositorio
 
-Bash
+El código fuente debe ser descargado en el equipo local. Para ello, se debe abrir una terminal y ejecutar los siguientes comandos, los cuales clonarán el repositorio y permitirán el acceso al directorio principal:
 
-```
-git clone <tu-url-de-repositorio>
-cd almazara-thesis 2. Infraestructura Blockchain (Hardhat)
-```
-
-Necesitamos levantar nuestra propia red blockchain local para pruebas. Abrí una terminal nueva y ejecutá:
-
-Bash
-
-```
-npm install
-npx hardhat node
+```bash
+git clone <url-del-repositorio>
+cd SOLaR-Chain
 ```
 
-Dejá esa terminal corriendo. Abrí otra terminal nueva para desplegar el Smart Contract en esa red que acabamos de crear:
+### Paso 2: Inicialización de la Red Blockchain (Ganache)
 
-Bash
+La infraestructura blockchain local debe ser establecida y ejecutada utilizando Ganache.
 
+1. La aplicación Ganache debe ser iniciada (ya sea mediante su interfaz de usuario o ejecutando `ganache-cli` en la terminal) para aprovisionar una red local de pruebas.
+
+### Paso 3: Compilación y Despliegue del Smart Contract
+
+Una vez que la red de Ganache se encuentre en ejecución, el contrato inteligente debe ser compilado y desplegado. En la terminal, se debe ejecutar el comando de despliegue, asegurando que la red configurada en Hardhat apunte a la instancia local (generalmente puerto 7545 o 8545):
+
+1. Primero se navega al directorio 'solar-chain-hardhatv2':
+
+```bash
+cd solar-chain-hardhatv2
 ```
+
+2. Posteriormente se ejecuta el comando:
+
+```bash
 npx hardhat ignition deploy ./ignition/modules/AlmazaraModule.js --network localhost
 ```
 
-| Importante: Al finalizar, la terminal te va a mostrar una dirección (Contract Address) que empieza con 0x. Copiala, la vas a necesitar en el siguiente paso.
+> **Importante:** Al finalizar el proceso, la consola mostrará una dirección de contrato (Contract Address) que inicia con el prefijo `0x`. Esta dirección debe ser copiada, ya que es un requerimiento indispensable para la configuración del servidor backend.
 
-3. Configuración del Backend
-   Ahora vamos a levantar la API y las bases de datos. Navegá a la carpeta del backend y prepará el entorno:
+### Paso 4: Configuración e Inicialización del Backend
 
-Bash
+La configuración del Backend comienza copiando el archivo JSON del contrato que se generó al hacer el _deployment_ del paso anterior,el cual está en la carpeta `solar-chain-hardhatv2/ignition/deployments/chain-1337/artifacts/`. Es el archivo que **no** tiene la extensión .dbg. Este archivo se copia y se pega en `backend/src/abis/`.
 
-```
+La API y las capas de base de datos deben ser preparadas. Se debe navegar al directorio del backend, instalar sus respectivas dependencias y generar el archivo de variables de entorno a partir de la plantilla provista:
+
+```bash
 cd backend
 npm install
 cp .env.example .env
 ```
 
-Abrí el archivo .env nuevo que se generó y pegá ahí la dirección del contrato que copiaste en el paso anterior, junto con tu clave privada.
+El archivo `.env` recién generado debe ser editado. En dicho archivo se debe ingresar la dirección del contrato obtenida en el Paso 3, así como una de las claves privadas proporcionadas por la red de Ganache.
 
-Finalmente, encendé el servidor (esto también creará las bases de datos SQLite automáticamente):
+Finalmente, el servidor debe ser inicializado. Esta acción ejecutará las migraciones y creará las bases de datos SQLite automáticamente:
 
-```
+```bash
 node src/app.js
 ```
 
+> **Importante**. Para pasar al siguiente paso, en el backend se debe ejecutar el endpoint /auth/init con los datos de la clave maestra y contraseña nuevas.
+
+### Paso 5: Configuración e Inicialización del Frontend
+
+Para preparar la interfaz de usuario, se debe abrir una nueva pestaña en la terminal y navegar al directorio correspondiente. Las dependencias de la interfaz deben ser instaladas y el servidor de desarrollo debe ser iniciado:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+_(Nota: El comando de ejecución final puede variar a `npm start` dependiendo de la configuración del framework utilizado en el entorno frontend)._
+
+---
+
 ## 💾 Gestión de Datos (Arquitectura Híbrida)
 
-El sistema utiliza tres capas de persistencia para garantizar seguridad y alto rendimiento en un entorno industrial:
+El sistema está diseñado empleando tres capas de persistencia para asegurar la inmutabilidad y el alto rendimiento en un entorno industrial:
 
-Blockchain (Smart Contract): Almacena el estado actual del lote, las validaciones químicas estrictas y los hashes de integridad.
+- **Blockchain (Smart Contract):** Es utilizada para almacenar el estado actual del lote, las validaciones químicas de carácter estricto y los hashes de integridad.
+- **database.sqlite (Operativa):** Es empleada para la gestión del inventario de la tolva y los datos generales de los lotes, lo cual optimiza la velocidad de lectura y búsqueda desde el Frontend.
+- **history.sqlite (Auditoría):** Es implementada como una bitácora inmutable (Audit Log), registrando de manera permanente todos los eventos y transiciones capturados directamente desde la red blockchain.
 
-database.sqlite (Operativa): Gestiona el inventario de la tolva y los datos de los lotes para permitir búsquedas y lecturas rápidas desde el Frontend.
-
-history.sqlite (Auditoría): Funciona como una bitácora inmutable (Audit Log) de todos los eventos y transiciones capturados directamente desde los eventos de la blockchain.
+---
 
 ## 🔌 Endpoints Principales de la API
 
-Gestión de Lotes (/api/lotes)
-POST /abastecer-tolva: Carga kilos de aceituna en el inventario local.
+**Gestión de Lotes (`/api/lotes`)**
 
-POST /crear: Registra un lote en SQLite, genera su hash de integridad y lo ancla criptográficamente en la Blockchain.
+- `POST /abastecer-tolva`: El inventario local es abastecido mediante el registro de kilogramos de aceituna.
+- `POST /crear`: Un nuevo lote es registrado en la base de datos operativa, su hash de integridad es generado y posteriormente es anclado de forma criptográfica en la red Blockchain.
+- `POST /avanzar-etapa`: La lógica de negocio es validada y ejecutada en el Smart Contract, y el evento resultante es almacenado en la bitácora de auditoría.
+- `POST /cancelar`: Función crítica diseñada para la anulación permanente de un lote que presente inconsistencias.
+- `GET /consultar/:codigoLote`: El estado oficial e inmutable del lote es consultado directamente desde la red Blockchain.
+- `GET /auditar/:idSqlite`: El hash local de la base de datos es recalculado y comparado contra el hash de la blockchain para la detección automática de alteraciones o fraudes.
+- `GET /historial/:idLoteBlockchain`: La trazabilidad y línea de tiempo completa del lote es recuperada para su representación gráfica en la interfaz.
 
-POST /avanzar-etapa: Ejecuta la lógica de negocio en el Smart Contract y guarda el evento de resultado en la bitácora de auditoría.
-
-POST /cancelar: Actúa como "botón de pánico" para anular permanentemente un lote con errores.
-
-GET /consultar/:codigoLote: Obtiene los datos oficiales y el estado del lote directamente desde la Blockchain.
-
-GET /auditar/:idSqlite: Compara el hash local de la base de datos contra el hash inmutable de la blockchain para detectar alteraciones o fraudes.
-
-GET /historial/:idLoteBlockchain: Recupera la línea de tiempo completa del lote para dibujarla en el tablero del Frontend.
+---
 
 ## 🧪 Guía de Pruebas y Auditoría
 
-Para verificar la integridad del sistema frente a un jurado, podés seguir este flujo de demostración de fraude:
+Para la verificación y demostración de la integridad del sistema frente a un proceso de evaluación, se sugiere el siguiente protocolo de simulación de fraude:
 
-Crear un Lote: Abastecé la tolva y creá un lote nuevo.
-
-Auditar: Consultá el endpoint de auditoría (/auditar/1); el estado que devuelve el sistema debe ser INTEGRO.
-
-Simular Hackeo: Abrí el archivo database.sqlite con un gestor de bases de datos, modificá maliciosamente el peso o la variedad de ese lote y guardá los cambios.
-
-Comprobar: Volvé a consultar el endpoint de auditoría. El sistema recalculará el hash local, detectará la discrepancia con la Blockchain y marcará el lote automáticamente como CORROMPIDO.
-
-¿Te queda cómodo este formato para llevarlo a tu repositorio? Si querés, el próximo paso que podemos hacer es dejar armado el archivo .env.example con las variables vacías para que quede todo el entorno documentado a la perfección.
+1.  **Creación e Ingreso:** La tolva es abastecida y un nuevo lote es creado a través del sistema.
+2.  **Auditoría Inicial:** El endpoint de auditoría (`/auditar/1`) es consultado. Como resultado, el estado retornado por el sistema debe certificar que la información se encuentra **ÍNTEGRA**.
+3.  **Simulación de Vulnerabilidad:** Utilizando un gestor de bases de datos externo, el archivo `database.sqlite` es intervenido de forma manual, modificando parámetros sensibles del lote, tales como el peso o la variedad. Los cambios son guardados directamente en el archivo local.
+4.  **Comprobación de Seguridad:** El endpoint de auditoría es consultado nuevamente. El sistema procederá a recalcular el hash local, detectará la inconsistencia frente a la huella criptográfica de la Blockchain y el lote será marcado de manera automática y permanente como **CORROMPIDO**.

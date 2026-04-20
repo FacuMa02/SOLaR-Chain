@@ -16,10 +16,11 @@ import Login from "./pages/Login";
 import Recover from "./pages/Recover";
 import CargarLote from "./pages/CargarLote";
 import CancelarLote from "./pages/CancelarLote";
+import FirstRunExperience from "./pages/FirstRunExperience";
 import * as remitosSvc from "./services/remitosService";
+import { getAuthStatus, getCurrentUser } from "./services/authService";
 
 import * as lotesSvc from "./services/lotesService";
-import * as api from "./services/apiClient";
 
 function uid() {
   return crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random()}`;
@@ -27,7 +28,7 @@ function uid() {
 
 function ProtectedLayout({ onLogout }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col">
       <Topbar onLogout={onLogout} />
       <main className="flex-1 min-h-0">
         <Outlet />
@@ -36,7 +37,7 @@ function ProtectedLayout({ onLogout }) {
   );
 }
 
-function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateRemito }) {
+function LogoutWrapper({ authed, setAuthed, initialized, setInitialized, toast, lotes, setLotes, onCreateRemito }) {
   const nav = useNavigate();
   const doLogout = () => {
     sessionStorage.removeItem("solar_authed");
@@ -47,11 +48,31 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateRemi
 
   return (
     <Routes>
+      {/* First-Run Experience */}
+      <Route
+        path="/setup"
+        element={
+          initialized ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <FirstRunExperience
+              toast={toast}
+              onInitialized={() => {
+                setInitialized(true);
+                nav("/login", { replace: true });
+              }}
+            />
+          )
+        }
+      />
+
       {/* Auth routes */}
       <Route
         path="/login"
         element={
-          authed ? (
+          !initialized ? (
+            <Navigate to="/setup" replace />
+          ) : authed ? (
             <Navigate to="/" replace />
           ) : (
             <Login
@@ -71,7 +92,7 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateRemi
       <Route
         element={authed ? <ProtectedLayout onLogout={doLogout} /> : <Navigate to="/login" replace />}
       >
-          <Route index element={<Inicio lotes={lotes} />} />        
+          <Route index element={<Inicio toast={toast} />} />        
     
         <Route path="/dashboard" element={<DashboardAnaliticas />} />
         <Route path="/nuevo-remito" element={<NuevoRemito onCreate={onCreateRemito} toast={toast} />} />
@@ -89,7 +110,7 @@ function LogoutWrapper({ authed, setAuthed, toast, lotes, setLotes, onCreateRemi
       </Route>
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to={authed ? "/" : "/login"} replace />} />
+      <Route path="*" element={<Navigate to={!initialized ? "/setup" : authed ? "/" : "/login"} replace />} />
     </Routes>
 
       )
@@ -110,6 +131,38 @@ export default function App() {
     };
   }, []);
 
+  // ----- First-Run Experience -----
+  const [initialized, setInitialized] = useState(false);
+  const [checkingInit, setCheckingInit] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkInitialization() {
+      try {
+        const response = await getAuthStatus();
+        if (!cancelled) {
+          setInitialized(response.initialized === true);
+        }
+      } catch (error) {
+        // Si hay error de conexión, asumir que no está inicializado
+        if (!cancelled) {
+          setInitialized(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingInit(false);
+        }
+      }
+    }
+
+    checkInitialization();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Auth (session local) --------
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("solar_authed") === "1");
 
@@ -120,7 +173,7 @@ export default function App() {
       if (!authed) return;
 
       try {
-        await api.get("/auth/me");
+        await getCurrentUser();
       } catch {
         if (cancelled) return;
         sessionStorage.removeItem("solar_authed");
@@ -151,9 +204,22 @@ export default function App() {
     await remitosSvc.createRemito(payload);
   }
 
+  // Mostrar loading mientras se verifica la inicialización
+  if (checkingInit) {
+    return (
+      <div className="min-h-screen bg-base-200 flex items-center justify-center">
+        <div className="text-center">
+          <span className="loading loading-spinner loading-lg"></span>
+          <p className="mt-4 text-base-content/70">Cargando aplicación...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <ToastHost toasts={toasts} />
-      <LogoutWrapper authed={authed} setAuthed={setAuthed} toast={toast} lotes={lotes} setLotes={setLotes} onCreateRemito={onCreateRemito} />    </BrowserRouter>
+      <LogoutWrapper authed={authed} setAuthed={setAuthed} initialized={initialized} setInitialized={setInitialized} toast={toast} lotes={lotes} setLotes={setLotes} onCreateRemito={onCreateRemito} />
+    </BrowserRouter>
   );
 }

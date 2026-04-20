@@ -35,3 +35,5 @@ solar-chain-hardhatv2/ignition/deployments/chain-1337
 # Bases de datos SQLite
 backend/*.sqlite
 
+# ABI del backend
+backend/abis/*.json

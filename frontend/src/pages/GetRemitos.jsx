@@ -17,14 +17,17 @@ function formatDate(value) {
 export default function GetRemitos({ toast }) {
   const [remitos, setRemitos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [selectedRemito, setSelectedRemito] = useState(null);
   const [loadingSelected, setLoadingSelected] = useState(false);
 
-  const fetchRemitos = useCallback(async () => {
+  const fetchRemitos = useCallback(async (pageNum = 1) => {
     setLoading(true);
     try {
-      const data = await remitosSvc.getRemitos();
-      setRemitos(data);
+      const res = await remitosSvc.getRemitos(pageNum, 10);
+      setRemitos(res.data);
+      setTotalPages(res.totalPages || 1);
     } catch (err) {
       toast.error(err.message || "No se pudieron cargar los remitos.");
     } finally {
@@ -33,8 +36,8 @@ export default function GetRemitos({ toast }) {
   }, [toast]);
 
   useEffect(() => {
-    fetchRemitos();
-  }, [fetchRemitos]);
+    fetchRemitos(page);
+  }, [fetchRemitos, page]);
 
   const handleSelectRemito = async (remitoId) => {
     setLoadingSelected(true);
@@ -56,7 +59,7 @@ export default function GetRemitos({ toast }) {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Remitos</h1>
-        <button type="button" className="btn btn-outline" onClick={fetchRemitos} disabled={loading}>
+        <button type="button" className="btn btn-outline" onClick={() => fetchRemitos(page)} disabled={loading}>
           {loading ? "Actualizando..." : "Actualizar"}
         </button>
       </div>
@@ -89,7 +92,7 @@ export default function GetRemitos({ toast }) {
                   className="cursor-pointer transition hover:bg-base-200"
                   onClick={() => handleSelectRemito(remito.id)}
                 >
-                  <td className="font-semibold">#{remito.id}</td>
+                  <td className="font-semibold">{remito.nroRemito}</td>
                   <td>{formatDate(remito.fechaRecepcion)}</td>
                   <td>{remito.productor}</td>
                   <td>{remito.origen}</td>
@@ -102,9 +105,27 @@ export default function GetRemitos({ toast }) {
         </table>
       </div>
 
+      <div className="flex justify-between items-center mt-4">
+        <button
+          className="btn btn-outline btn-sm"
+          disabled={page <= 1 || loading}
+          onClick={() => setPage(page - 1)}
+        >
+          Anterior
+        </button>
+        <span>Página {page} de {totalPages === 0 ? 1 : totalPages}</span>
+        <button
+          className="btn btn-outline btn-sm"
+          disabled={page >= totalPages || loading}
+          onClick={() => setPage(page + 1)}
+        >
+          Siguiente
+        </button>
+      </div>
+
       <SideDrawer
         open={!!selectedRemito || loadingSelected}
-        title={selectedRemito ? `Remito #${selectedRemito.id}` : "Detalle de remito"}
+        title={selectedRemito ? `Remito ${selectedRemito.nroRemito}` : "Detalle de remito"}
         onClose={handleClose}
       >
         {loadingSelected ? (
@@ -113,6 +134,7 @@ export default function GetRemitos({ toast }) {
           <p className="text-sm text-base-content/70">Seleccione un remito para ver su detalle.</p>
         ) : (
           <div className="space-y-3 text-sm">
+            <p><span className="font-semibold">N° Remito:</span> {selectedRemito.nroRemito}</p>
             <p><span className="font-semibold">Fecha recepción:</span> {formatDate(selectedRemito.fechaRecepcion)}</p>
             <p><span className="font-semibold">Productor:</span> {selectedRemito.productor}</p>
             <p><span className="font-semibold">Origen:</span> {selectedRemito.origen}</p>

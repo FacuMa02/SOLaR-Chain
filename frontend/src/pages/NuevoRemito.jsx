@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import * as api from "../services/apiClient"; // Asegúrate de que esta ruta sea la correcta
 import { getRemitosCatalogos } from "../services/remitosService";
+import { getVariedades } from "../services/lotesService";
 import MemoryInput from "../components/MemoryInput";
 
 const ESTADOS = ["buena", "regular", "mala"];
@@ -18,6 +18,7 @@ function todayISO() {
 export default function NuevoRemito({ onCreate, toast }) {
   const nav = useNavigate();
 
+  const [nroRemito, setNroRemito] = useState("");
   const [fechaRecepcion, setFechaRecepcion] = useState(todayISO());
   const [productor, setProductor] = useState("");
   const [origen, setOrigen] = useState("");
@@ -40,7 +41,7 @@ export default function NuevoRemito({ onCreate, toast }) {
   useEffect(() => {
     async function fetchVariedades() {
       try {
-        const res = await api.get("/lotes/variedades");
+        const res = await getVariedades();
         if (res.success) {
           setVariedadesDb(res.data);
         }
@@ -76,6 +77,8 @@ export default function NuevoRemito({ onCreate, toast }) {
 
   function validate() {
     const e = {};
+    const nroNum = Number.parseInt(nroRemito, 10);
+    if (!nroRemito.trim() || !Number.isInteger(nroNum) || nroNum <= 0) e.nroRemito = "Debe ingresar un número de remito válido (entero mayor a 0)";
     if (!fechaRecepcion) e.fechaRecepcion = "Fecha obligatoria";
     if (!productor.trim()) e.productor = "Productor obligatorio";
     if (!origen.trim()) e.origen = "Origen obligatorio";
@@ -99,6 +102,7 @@ export default function NuevoRemito({ onCreate, toast }) {
       }
 
       await onCreate({
+        nroRemito: Number.parseInt(nroRemito, 10),
         fechaRecepcion,
         productor,
         origen,
@@ -129,6 +133,26 @@ export default function NuevoRemito({ onCreate, toast }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Número de remito *</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-base-content/60 whitespace-nowrap">{`REM-${new Date().getFullYear()}-`}</span>
+                <input
+                  type="number"
+                  min={1}
+                  className={`input input-bordered w-full ${errors.nroRemito ? "input-error" : ""}`}
+                  value={nroRemito}
+                  onChange={(e) => setNroRemito(e.target.value)}
+                  placeholder="Ej: 1"
+                />
+              </div>
+              {errors.nroRemito && (
+                <span className="text-xs text-error mt-1">{errors.nroRemito}</span>
+              )}
+            </div>
+
             <div className="form-control">
               <label className="label">
                 <span className="label-text">Fecha de recepción *</span>

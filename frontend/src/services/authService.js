@@ -1,25 +1,26 @@
-// base URL of the backend. by default the server listens on port 3001
-// (see app.js output). the /api prefix is added here so callers can use
-// paths like "/auth/login".
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const AUTH_ENDPOINT = import.meta.env.VITE_AUTH_ENDPOINT || "/api/auth";
 
-async function post(path, body) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
+async function request(method, path, body = null) {
+  const options = {
+    method,
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(body),
-  });
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  const res = await fetch(`${AUTH_ENDPOINT}${path}`, options);
 
   let data = null;
   try {
     data = await res.json();
   } catch {
-    // si el backend devuelve HTML (404), esto evita que se rompa
+    // Si backend responde vacío o HTML, no rompemos por parseo JSON.
   }
 
   if (!res.ok) {
-
     throw new Error(data?.error || data?.message || `Error HTTP ${res.status}`);
   }
 
@@ -27,16 +28,27 @@ async function post(path, body) {
 }
 
 export function login(password) {
-  return post("/auth/login", { password });
+  return request("POST", "/login", { password });
 }
 
 export function recover(masterKey, newPassword) {
-  return post("/auth/recover", { masterKey, newPassword });
+  return request("POST", "/recover", { masterKey, newPassword });
 }
-
 
 export function logout() {
-  return post("/auth/logout", {});
+  return request("POST", "/logout", {});
 }
 
-export { API_BASE };
+export function getAuthStatus() {
+  return request("GET", "/status");
+}
+
+export function getCurrentUser() {
+  return request("GET", "/me");
+}
+
+export function initializeAuth(masterKey, adminPassword) {
+  return request("POST", "/init", { masterKey, adminPassword });
+}
+
+export { AUTH_ENDPOINT };

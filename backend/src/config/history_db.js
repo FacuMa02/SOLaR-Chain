@@ -84,45 +84,45 @@ export async function initHistoryDB() {
     await ensureColumnExists(db, "historial_eventos", "responsable_id", "INTEGER");
     await ensureColumnExists(db, "historial_eventos", "fecha_registro", "TEXT");
 
-    // Backfill minimo para filas legadas y para evitar NULLs en consultas normalizadas.
-    await db.exec(`
-        UPDATE historial_eventos
-        SET id_tipo_evento = COALESCE(
-            id_tipo_evento,
-            CASE
-                WHEN tipo_evento IN (1, '1', 'CREACION_LOTE') THEN 1
-                WHEN tipo_evento IN (2, '2', 'TRANSICION_ETAPA') THEN 2
-                WHEN tipo_evento IN (3, '3', 'ALERTA_SEGURIDAD') THEN 3
-                WHEN tipo_evento IN (4, '4', 'OVERRIDE_CALIDAD') THEN 4
-                ELSE 2
-            END
-        )
-        WHERE id_tipo_evento IS NULL;
+    // // Backfill minimo para filas legadas y para evitar NULLs en consultas normalizadas.
+    // await db.exec(`
+    //     UPDATE historial_eventos
+    //     SET id_tipo_evento = COALESCE(
+    //         id_tipo_evento,
+    //         CASE
+    //             WHEN tipo_evento IN (1, '1', 'CREACION_LOTE') THEN 1
+    //             WHEN tipo_evento IN (2, '2', 'TRANSICION_ETAPA') THEN 2
+    //             WHEN tipo_evento IN (3, '3', 'ALERTA_SEGURIDAD') THEN 3
+    //             WHEN tipo_evento IN (4, '4', 'OVERRIDE_CALIDAD') THEN 4
+    //             ELSE 2
+    //         END
+    //     )
+    //     WHERE id_tipo_evento IS NULL;
 
-        UPDATE historial_eventos
-        SET id_etapa_relacionada = COALESCE(
-            id_etapa_relacionada,
-            CASE
-                WHEN etapa IN (0, '0', 'RECEPCION') THEN 0
-                WHEN etapa IN (1, '1', 'MOLIENDA') THEN 1
-                WHEN etapa IN (2, '2', 'BATIDO') THEN 2
-                WHEN etapa IN (3, '3', 'CENTRIFUGADO') THEN 3
-                WHEN etapa IN (4, '4', 'DECANTACION') THEN 4
-                WHEN etapa IN (5, '5', 'ANALISIS') THEN 5
-                WHEN etapa IN (6, '6', 'ALMACENAMIENTO') THEN 6
-                ELSE 0
-            END
-        )
-        WHERE id_etapa_relacionada IS NULL;
+    //     UPDATE historial_eventos
+    //     SET id_etapa_relacionada = COALESCE(
+    //         id_etapa_relacionada,
+    //         CASE
+    //             WHEN etapa IN (0, '0', 'RECEPCION') THEN 0
+    //             WHEN etapa IN (1, '1', 'MOLIENDA') THEN 1
+    //             WHEN etapa IN (2, '2', 'BATIDO') THEN 2
+    //             WHEN etapa IN (3, '3', 'CENTRIFUGADO') THEN 3
+    //             WHEN etapa IN (4, '4', 'DECANTACION') THEN 4
+    //             WHEN etapa IN (5, '5', 'ANALISIS') THEN 5
+    //             WHEN etapa IN (6, '6', 'ALMACENAMIENTO') THEN 6
+    //             ELSE 0
+    //         END
+    //     )
+    //     WHERE id_etapa_relacionada IS NULL;
 
-        UPDATE historial_eventos
-        SET id_estado_resultado = COALESCE(id_estado_resultado, 0)
-        WHERE id_estado_resultado IS NULL;
+    //     UPDATE historial_eventos
+    //     SET id_estado_resultado = COALESCE(id_estado_resultado, 0)
+    //     WHERE id_estado_resultado IS NULL;
 
-        UPDATE historial_eventos
-        SET fecha_registro = COALESCE(fecha_registro, fecha, datetime('now'))
-        WHERE fecha_registro IS NULL;
-    `);
+    //     UPDATE historial_eventos
+    //     SET fecha_registro = COALESCE(fecha_registro, fecha, datetime('now'))
+    //     WHERE fecha_registro IS NULL;
+    // `);
 
     console.log("Base de datos histórica desplegada.");
     historyDbInstance = db;

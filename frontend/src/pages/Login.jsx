@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/solar-225.jpg";
-import { login as apiLogin, API_BASE } from "../services/authService";
+import { login as apiLogin, AUTH_ENDPOINT } from "../services/authService";
 
 function EyeIcon(props) {
   return (
@@ -130,7 +130,7 @@ export default function Login({ onLoggedIn, toast }) {
         </form>
 
         <div className="text-xs text-base-content/60">
-          Backend esperado en: <span className="font-mono">{API_BASE}</span>
+          Endpoint Auth: <span className="font-mono">{AUTH_ENDPOINT}</span>
         </div>
       </div>
     </div>

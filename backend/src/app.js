@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.js";
 import loteRoutes from "./routes/lote.js";
 import remitoRoutes from "./routes/remito.js";
 import analiticasRoutes from "./routes/analiticas.js";
+import tolvaRoutes from "./routes/tolva.js";
 import requireAuth from "./middleware/requireAuth.js";
 
 dotenv.config();
@@ -35,6 +36,7 @@ async function startServer() {
         app.use('/api/auth', authRoutes); // Asegúrate de que el nombre coincida con tu importación
         app.use('/api/lotes', requireAuth, loteRoutes);
         app.use('/api/remitos', requireAuth, remitoRoutes);
+        app.use('/api/tolva', requireAuth, tolvaRoutes);
         app.use("/api/analiticas", requireAuth, analiticasRoutes);
 
         // 3. LEVANTAR EL SERVIDOR AL FINAL

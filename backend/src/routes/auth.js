@@ -17,7 +17,6 @@ router.use(cors({ origin: "http://localhost:5173", credentials: true }));
 /* Obtiene un valor de configuración del sistema a partir de su clave. */
 async function getSetting(key) {
     const db = getDB();
-    await db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
     const row = await db.get("SELECT value FROM settings WHERE key = ?", [key]);
     return row ? row.value : null;
 }
@@ -25,18 +24,28 @@ async function getSetting(key) {
 /* Almacena o modifica un valor de configuración clave-valor en el sistema. */
 async function setSetting(key, value) {
     const db = getDB();
-    await db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
     await db.run(
         "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         [key, value]
     );
 }
 
-/* Verifica si el usuario administrador y la clave maestra ya fueron registrados en la base de datos. */
+/* Verifica si la aplicación ya fue inicializada (primera ejecución completada). */
 async function isInitialized() {
-    const user = await getDB().get("SELECT * FROM users WHERE dni='admin'");
+    const initialized = await getSetting("initialized");
+    if (initialized === "true") return true;
+
+    // Compatibilidad retroactiva: si existe una instalación previa con admin + master_key_hash,
+    // la marcamos como inicializada automáticamente para no forzar el flujo /init.
+    const user = await getDB().get("SELECT dni FROM users WHERE dni='admin'");
     const master = await getSetting("master_key_hash");
-    return !!user && !!master;
+    const legacyInitialized = !!user && !!master;
+
+    if (legacyInitialized) {
+        await setSetting("initialized", "true");
+    }
+
+    return legacyInitialized;
 }
 
 /* Genera una cadena criptográfica aleatoria para ser utilizada como token de sesión. */
@@ -67,10 +76,11 @@ router.post("/init", async (req, res) => {
     const createdAt = new Date().toISOString();
 
     await getDB().run(
-        "INSERT INTO users (dni, password_hash, created_at) VALUES ('admin', ?, ?)",
+        "INSERT INTO users (dni, password_hash, created_at) VALUES ('admin', ?, ?) ON CONFLICT(dni) DO UPDATE SET password_hash=excluded.password_hash, created_at=excluded.created_at",
         [passHash, createdAt]
     );
     await setSetting("master_key_hash", masterHash);
+    await setSetting("initialized", "true");
 
     await clearSessions(res);
     res.json({ ok: true });

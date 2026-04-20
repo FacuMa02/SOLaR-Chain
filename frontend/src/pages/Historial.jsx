@@ -19,6 +19,23 @@ export default function Historial({ toast }) {
   const [auditoria, setAuditoria] = useState(null);
   const [auditando, setAuditando] = useState(false);
 
+  const parseFechaRecepcion = (value) => {
+    if (!value) return 0;
+
+    const isoDate = Date.parse(value);
+    if (!Number.isNaN(isoDate)) return isoDate;
+
+    const match = String(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!match) return 0;
+
+    const [, dd, mm, yyyy] = match;
+    return new Date(Number(yyyy), Number(mm) - 1, Number(dd)).getTime();
+  };
+
+  const sortedLotes = [...lotes].sort(
+    (a, b) => parseFechaRecepcion(b.fechaRecepcion) - parseFechaRecepcion(a.fechaRecepcion)
+  );
+
   const fetchHistorial = useCallback(async (searchTerm = "", pageNum = 1) => {
     setLoading(true);
     try {
@@ -145,10 +162,10 @@ export default function Historial({ toast }) {
           <tbody>
             {loading ? (
               <tr><td colSpan="4" className="text-center py-4">Cargando...</td></tr>
-            ) : lotes.length === 0 ? (
+            ) : sortedLotes.length === 0 ? (
               <tr><td colSpan="4" className="text-center py-4">No se encontraron lotes.</td></tr>
             ) : (
-              lotes.map((lote) => (
+              sortedLotes.map((lote) => (
                 <tr
                   key={lote.id}
                   className="cursor-pointer transition hover:bg-base-200"

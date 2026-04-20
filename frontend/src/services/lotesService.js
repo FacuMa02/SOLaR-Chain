@@ -1,7 +1,5 @@
 import { STAGES } from "../data/stages";
-import * as api from "./apiClient";
-
-const url = import.meta.env.VITE_API_LOTE_URL;
+const LOTES_ENDPOINT = import.meta.env.VITE_LOTES_ENDPOINT || "/api/lotes";
 const KEY = "solar_lotes_v1";
 
 const FAIL_RATE = 0.25; // 25%
@@ -28,6 +26,33 @@ function load() {
 
 function save(lotes) {
   localStorage.setItem(KEY, JSON.stringify(lotes));
+}
+
+async function request(method, path, body = null) {
+  const options = {
+    method,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  const res = await fetch(`${LOTES_ENDPOINT}${path}`, options);
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Evita fallos de parseo JSON cuando la respuesta no viene en JSON.
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || `Error HTTP ${res.status}`);
+  }
+
+  return data;
 }
 
 function ensureSeed() {
@@ -88,7 +113,7 @@ export function getLotes() {
  * Convierte los registros a la forma que espera el frontend.
  */
 export async function fetchTablero() {
-  const response = await api.get("/lotes/tablero");
+  const response = await request("GET", "/tablero");
   if (!response.success) {
     throw new Error(response.error || "Error al cargar el tablero");
   }
@@ -150,7 +175,7 @@ export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPaylo
     payload = { codigoLote: codigoLoteOrBlockchainId, etapa: toStageIndexOrPayload };
   }
 
-  const response = await api.post("/lotes/avanzar-etapa", payload);
+  const response = await request("POST", "/avanzar-etapa", payload);
   if (!response.success) {
     throw new Error(response.error || response.message || "Error al avanzar etapa");
   }
@@ -158,7 +183,7 @@ export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPaylo
 }
 
 export async function reportInvalidTransition(blockchainId, stageIndex, motivo) {
-  const response = await api.post("/lotes/registrar-intento-transicion", {
+  const response = await request("POST", "/registrar-intento-transicion", {
     idLoteBlockchain: blockchainId,
     etapaDestino: stageIndex,
     motivo,
@@ -172,7 +197,7 @@ export async function reportInvalidTransition(blockchainId, stageIndex, motivo) 
 }
 
 export async function getLoteTimeline(sqliteId) {
-  const response = await api.get(`/lotes/historial-sqlite/${sqliteId}`);
+  const response = await request("GET", `/historial-sqlite/${sqliteId}`);
 
   if (!response.success) {
     throw new Error(response.error || response.message || "No se pudo obtener la trazabilidad del lote");
@@ -182,11 +207,19 @@ export async function getLoteTimeline(sqliteId) {
 }
 
 export async function auditarLote(sqliteId) {
-  const response = await api.get(`/lotes/auditar/${sqliteId}`);
+  const response = await request("GET", `/auditar/${sqliteId}`);
   if (!response.success) {
     throw new Error(response.error || response.message || "No se pudo auditar el lote");
   }
   return response.auditoria;
+}
+
+export async function fetchUltimosLotes() {
+  const response = await request("GET", "/ultimos");
+  if (!response.success) {
+    throw new Error(response.error || response.message || "No se pudieron obtener los ultimos lotes");
+  }
+  return response.data || [];
 }
 
 export function setLotes(next) {
@@ -245,7 +278,7 @@ export async function submitLoteToBlockchain(loteId) {
 
   try {
     // Enviar remito al backend
-    const response = await api.post("/crear-lote", { remito: lote.codigo });
+    const response = await request("POST", "/crear-lote", { remito: lote.codigo });
 
     if (!response.success || !response.data?.idBlockchain) {
       throw new Error(response.error || "No se obtuvo ID de blockchain");
@@ -296,7 +329,7 @@ export async function updateLoteStageAsync(loteId, toStageIndex) {
 }
 
 export async function getHistorial(search = "", page = 1, limit = 10) {
-  const res = await fetch(`${url}/lotes?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`, {
+  const res = await fetch(`${LOTES_ENDPOINT}/lotes?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`, {
     credentials: "include"
   });
   if (!res.ok) throw new Error("Error al obtener el historial");
@@ -324,11 +357,27 @@ async function downloadExcel(endpoint, fallbackFileName) {
 }
 
 export async function exportarLotesExcel(search = "") {
-  const endpoint = `${url}/lotes/export?search=${encodeURIComponent(search)}`;
+  const endpoint = `${LOTES_ENDPOINT}/lotes/export?search=${encodeURIComponent(search)}`;
   await downloadExcel(endpoint, "lotes_ultimos_3_anios.xlsx");
 }
 
 export async function exportarHistorialLoteExcel(sqliteId) {
-  const endpoint = `${url}/historial-sqlite/${sqliteId}/export`;
+  const endpoint = `${LOTES_ENDPOINT}/historial-sqlite/${sqliteId}/export`;
   await downloadExcel(endpoint, `historial_lote_sqlite_${sqliteId}.xlsx`);
+}
+
+export function getVariedades() {
+  return request("GET", "/variedades");
+}
+
+export function getMotivosCancelacion() {
+  return request("GET", "/motivos-cancelacion");
+}
+
+export function crearLote(payload) {
+  return request("POST", "/crear-lote", payload);
+}
+
+export function cancelarLote(payload) {
+  return request("POST", "/cancelar-lote", payload);
 }
