@@ -1,6 +1,6 @@
 # SOLaR-Chain - Sistema de Trazabilidad para Almazara
 
-## 🚀 Quick Start con Docker
+## Quick Start con Docker
 
 ### Requisitos
 
@@ -58,7 +58,7 @@ docker-compose logs -f backend
 docker-compose logs -f frontend
 ```
 
-## 🗂️ Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 SOLaR-Chain/
@@ -77,7 +77,7 @@ SOLaR-Chain/
 └── .dockerignore
 ```
 
-## 🔐 Seguridad
+## Seguridad
 
 ### Volúmenes Persistentes
 
@@ -88,22 +88,22 @@ La aplicación usa volúmenes Docker para persistir datos:
 
 Estos volúmenes:
 
-- ✅ Persisten entre reinicios de contenedores
-- ✅ Se conservan incluso si se recrean los contenedores
-- ✅ Se eliminan solo si ejecutas `docker-compose down -v`
+- Persisten entre reinicios de contenedores
+- Se conservan incluso si se recrean los contenedores
+- Se eliminan solo si ejecutas `docker-compose down -v`
 
 ### Variables de entorno
 
 Las contraseñas están hasheadas con Argon2 antes de guardarse en la BD.
 
-## 📝 Notas
+## Notas
 
 - La aplicación funciona **completamente offline** en la red local
 - No requiere conexión a internet
 - Compatible con redes corporativas cerradas
 - Ideal para instalación en máquinas locales/industriales
 
-## 🔧 Desarrollo Local (sin Docker)
+## Desarrollo Local (sin Docker)
 
 Si prefieres desarrollar sin Docker:
 
@@ -119,7 +119,7 @@ npm install
 npm run dev
 ```
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### "ERR_CONNECTION_REFUSED" en el frontend
 
