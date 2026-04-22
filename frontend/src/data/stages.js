@@ -3,5 +3,7 @@ export const STAGES = [
   "Molienda",
   "Batido",
   "Centrifugado",
+  "Decantado",
+  "Analisis",
   "Almacenamiento",
 ];

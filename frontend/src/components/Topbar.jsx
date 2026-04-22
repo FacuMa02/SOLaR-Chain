@@ -2,7 +2,8 @@ import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
 
 function tabClass({ isActive }) {
-  return `tab tab-bordered ${isActive ? "tab-active" : ""}`;
+  return `tab tab-bordered h-auto py-2 leading-tight ${isActive ? "tab-active" : ""}`;
+
 }
 
 export default function Topbar({ onLogout }) {
@@ -15,16 +16,25 @@ export default function Topbar({ onLogout }) {
     return localStorage.getItem("solar_text") === "large";
   });
 
-  // --- EFECTOS PARA APLICAR LOS CAMBIOS ---
+  
+// --- EFECTOS PARA APLICAR LOS CAMBIOS ---
   useEffect(() => {
     const theme = isDarkMode ? "dark" : "light";
-    // Esto cambia el tema de DaisyUI en toda la app al instante
+    
+    // 1. Cambia el tema de DaisyUI
     document.documentElement.setAttribute("data-theme", theme);
+    
+    // 2. Le avisa a Tailwind en toda la app
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    
     localStorage.setItem("solar_theme", theme);
   }, [isDarkMode]);
-
   useEffect(() => {
-    // Cambiando el fontSize de la etiqueta html base, Tailwind escala automáticamente todos los 'rem'
+    
     if (isLargeText) {
       document.documentElement.style.fontSize = "18px"; // Modo Grande
       localStorage.setItem("solar_text", "large");
