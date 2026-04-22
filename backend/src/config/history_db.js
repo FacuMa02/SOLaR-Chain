@@ -124,7 +124,7 @@ export async function initHistoryDB() {
     //     WHERE fecha_registro IS NULL;
     // `);
 
-    console.log("Base de datos histórica desplegada.");
+console.log("Base de datos histórica desplegada.");
     historyDbInstance = db;
     return db;
 }
