@@ -4,6 +4,21 @@ import { getHistoryDB } from "../config/history_db.js";
 
 const router = express.Router();
 
+function parseMetricas(detalles) {
+    if (!detalles) {
+        return { rendimiento: 0 };
+    }
+
+    try {
+        const parsed = JSON.parse(detalles);
+        return {
+            rendimiento: Number(parsed?.rendimiento || 0),
+        };
+    } catch {
+        return { rendimiento: 0 };
+    }
+}
+
 // Helper para sacar la etiqueta "Sem X (Mes)" de una fecha automáticamente
 function getWeekLabel(dateString) {
     if (!dateString) return "Sem ?";
@@ -35,8 +50,22 @@ router.get("/", async (req, res) => {
         const lotes = await db.all("SELECT blockchain_id, peso_kg FROM lotes WHERE blockchain_id IS NOT NULL");
         const countLotesActivos = await db.get("SELECT COUNT(*) as total FROM lotes WHERE id_estado_validacion != 3 AND blockchain_id IS NOT NULL");
 
-        // Solo traemos las transiciones que registraron un rendimiento mayor a 0
-        const transiciones = await historyDb.all("SELECT blockchain_id, rendimiento, fecha_hora FROM transiciones WHERE rendimiento > 0");
+        const eventosTransicion = await historyDb.all(`
+            SELECT blockchain_id, detalles, fecha_registro
+            FROM historial_eventos
+            WHERE id_tipo_evento = 2
+        `);
+
+        const transiciones = eventosTransicion
+            .map((evento) => {
+                const metricas = parseMetricas(evento.detalles);
+                return {
+                    blockchain_id: evento.blockchain_id,
+                    rendimiento: metricas.rendimiento,
+                    fecha_hora: evento.fecha_registro,
+                };
+            })
+            .filter((transicion) => transicion.rendimiento > 0);
 
         // 2. MATEMÁTICA PARA LOS KPIs (Tarjetas de resumen)
         const totalOliva = remitos.reduce((acc, r) => acc + r.kg, 0);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import * as api from "../services/apiClient";
+import { getVariedades, crearLote } from "../services/lotesService";
 import LoteCodeInput, { buildCodigoLote } from "../components/LoteCodeInput";
 
 export default function CargarLote({ toast }) {
@@ -22,7 +22,7 @@ export default function CargarLote({ toast }) {
   useEffect(() => {
     async function fetchVariedades() {
       try {
-        const res = await api.get("/lotes/variedades");
+        const res = await getVariedades();
         if (res.success) {
           setVariedadesDb(res.data);
         }
@@ -59,7 +59,7 @@ export default function CargarLote({ toast }) {
         pesoKg: Number(pesoKg),
       };
 
-      await api.post("/lotes/crear-lote", body);
+      await crearLote(body);
 
       toast.success("Lote creado correctamente");
       nav("/");

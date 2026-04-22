@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import * as api from "../services/apiClient";
+import { getMotivosCancelacion, cancelarLote } from "../services/lotesService";
 import LoteCodeInput, { buildCodigoLote } from "../components/LoteCodeInput";
 import MemoryInput from "../components/MemoryInput";
 
@@ -17,7 +17,7 @@ export default function CancelarLote({ toast }) {
   useEffect(() => {
     async function fetchMotivos() {
       try {
-        const res = await api.get("/lotes/motivos-cancelacion");
+        const res = await getMotivosCancelacion();
         if (res.success) {
           setMotivosDb(res.data?.motivos || []);
         }
@@ -48,7 +48,7 @@ export default function CancelarLote({ toast }) {
         motivo: motivo.trim(),
       };
 
-      await api.post("/lotes/cancelar-lote", body);
+      await cancelarLote(body);
 
       toast.success("Lote cancelado correctamente");
       nav("/");

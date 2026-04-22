@@ -244,7 +244,7 @@ export async function initDB() {
             nombre TEXT NOT NULL UNIQUE
         );
         INSERT OR IGNORE INTO variedades (id, nombre) VALUES
-        (1, 'Arauco'), (2, 'Arbequina'), (3, 'Hojiblanca'), (4, 'Picual'), (5, 'Manzanilla');
+        (1, 'Arauco'), (2, 'Arbequina'), (3, 'Hojiblanca'), (4, 'Picual'), (5, 'Manzanilla'), (6,'Mezcla');
     `);
 
     await db.exec(`
@@ -315,6 +315,13 @@ export async function initDB() {
     await normalizeLotesTable(db);
 
     await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lotes_codigo_lote_unique ON lotes(codigo_lote);`);
+
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+    `);
 
     await db.exec(`
         CREATE TABLE IF NOT EXISTS tolva (

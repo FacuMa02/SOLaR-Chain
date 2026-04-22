@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: solar-backend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    volumes:
+      # Volumen persistente para la base de datos SQLite
+      - solar_db_data:/app/backend
+      # Volumen persistente para la BD de blockchain
+      - solar_blockchain_db:/app/backend/blockchain_db
+    networks:
+      - solar_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/auth/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Web UI
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: solar-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - solar_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  # Base de datos SQLite persistente
+  solar_db_data:
+    driver: local
+  # Base de datos de blockchain persistente
+  solar_blockchain_db:
+    driver: local
+
+networks:
+  solar_network:
+    driver: bridge

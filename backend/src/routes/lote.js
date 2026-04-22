@@ -28,27 +28,21 @@ async function registrarEventoHistorial({ blockchainId, idTipoEvento, idEtapa, i
     await historyDb.run(
         `INSERT INTO historial_eventos (
             blockchain_id,
-            tipo_evento,
-            etapa,
-            detalles,
-            tx_hash,
-            fecha,
             id_tipo_evento,
             id_etapa_relacionada,
             id_estado_resultado,
+            tx_hash,
+            detalles,
             responsable_id,
             fecha_registro
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             blockchainId,
             idTipoEvento,
             idEtapa,
-            detalles,
-            txHash,
-            fecha,
-            idTipoEvento,
-            idEtapa,
             idEstadoResultado,
+            txHash,
+            detalles,
             responsableId,
             fecha,
         ]
@@ -258,14 +252,18 @@ router.post("/crear-lote", async (req, res) => {
         await db.exec("COMMIT");
         txActiva = false;
 
-        await registrarEventoHistorial({
-            blockchainId: blockchainId,
-            idTipoEvento: 1,
-            idEtapa: 0,
-            idEstadoResultado: 0,
-            detalles: "Lote registrado y anclado a la cadena",
-            txHash: chainResult.txHash
-        });
+        try {
+            await registrarEventoHistorial({
+                blockchainId: blockchainId,
+                idTipoEvento: 1,
+                idEtapa: 0,
+                idEstadoResultado: 0,
+                detalles: "Lote registrado y anclado a la cadena",
+                txHash: chainResult.txHash
+            });
+        } catch (historyError) {
+            console.error("No se pudo registrar el evento histórico del lote creado:", historyError);
+        }
 
         res.json({ success: true, data: { idSqlite, blockchainId, hashIntegridad, stockRestante: nuevoPesoTolva } });
 
@@ -754,6 +752,41 @@ router.get("/tablero", async (req, res) => {
     } catch (error) {
         console.error("Error en GET /api/lotes/tablero:", error);
         res.status(500).json({ success: false, error: "Error al cargar el tablero operativo." });
+    }
+});
+
+/*
+ * Devuelve los ultimos lotes creados para mostrar un resumen operativo en Inicio.
+ */
+router.get("/ultimos", async (_req, res) => {
+    const db = getDB();
+
+    try {
+        const rows = await db.all(
+            `SELECT
+                l.id_lote AS id,
+                l.codigo_lote AS codigo,
+                l.fecha_inicio AS fechaRecepcion,
+                v.nombre AS variedad,
+                l.peso_kg AS kg,
+                e.nombre AS etapaActual
+             FROM lotes l
+             INNER JOIN variedades v ON l.id_variedad = v.id
+             INNER JOIN etapas e ON l.id_etapa = e.id
+             ORDER BY l.id_lote DESC
+             LIMIT 10`
+        );
+
+        return res.json({
+            success: true,
+            total: rows.length,
+            data: rows,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: "No se pudieron obtener los ultimos lotes.",
+        });
     }
 });
 

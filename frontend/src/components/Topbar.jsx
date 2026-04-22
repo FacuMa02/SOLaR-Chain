@@ -54,9 +54,6 @@ export default function Topbar({ onLogout }) {
         <NavLink to="/dashboard" className={tabClass}>
           Dashboard
         </NavLink>
-        <NavLink to="/nuevo-lote" className={tabClass}>
-          Nuevo lote
-        </NavLink>
         <NavLink to="/proceso" className={tabClass}>
           Proceso productivo
         </NavLink>
