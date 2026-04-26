@@ -17,6 +17,7 @@ function pointClass(resultado) {
     case "OBSERVADO":
       return "bg-warning";
     case "NO_CONFORME":
+    case "BLOQUEADO":
     case "CANCELADO":
     case "TRANSICION_INVALIDA":
       return "bg-error";

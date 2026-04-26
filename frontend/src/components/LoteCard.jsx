@@ -13,7 +13,7 @@ function calidadBgStyle(calidad) {
   if (c.includes("corriente")) return { backgroundColor: "#86895d" };
   if (c.includes("oliva")) return { backgroundColor: "#bec092" };
   if (c.includes("refinado")) return { backgroundColor: "#6b4f00" };
-  if (c.includes("lampante") || c.includes("no apto")) return { backgroundColor: "red" };
+  if (c.includes("lampante") || c.includes("no apto")) return { backgroundColor: "#7f1d1d" };
 
   // Fallback neutro para cualquier observación no catalogada.
   return { backgroundColor: "var(--fallback-b1,oklch(var(--b1)/1))" };

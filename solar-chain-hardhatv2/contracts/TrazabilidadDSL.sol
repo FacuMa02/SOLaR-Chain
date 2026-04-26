@@ -16,7 +16,7 @@ library ProductionDSL {
     enum ResultadoValidacion {
         APROBADO,
         OBSERVADO,
-        NO_CONFORME,
+        BLOQUEADO,
         CANCELADO
     }
 
@@ -71,14 +71,6 @@ library ProductionDSL {
 
         // DECANTACION: validar rendimiento estimado (kgAceite / kgAceituna * 100)
         if (etapa == Etapa.DECANTACION) {
-            if (kpis.rendimiento == 0) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.NO_CONFORME,
-                        "Error: Masa de aceite nula"
-                    );
-            }
             if (kpis.rendimiento >= limites.minRendimiento) {
                 return
                     Validacion(
@@ -90,7 +82,7 @@ library ProductionDSL {
             return
                 Validacion(
                     false,
-                    ResultadoValidacion.NO_CONFORME,
+                    ResultadoValidacion.OBSERVADO,
                     "Rendimiento Estimado Bajo"
                 );
         }
@@ -103,15 +95,6 @@ library ProductionDSL {
 
         // ALMACENAMIENTO: clasificación por Acidez + Peróxidos + rendimiento definitivo
         if (etapa == Etapa.ALMACENAMIENTO) {
-            if (kpis.acidez == 0 && kpis.peroxidos == 0) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.NO_CONFORME,
-                        "Error: Valores quimicos nulos"
-                    );
-            }
-
             // Refinado: Acidez < 0.3% y Peróxidos <= 5
             if (
                 kpis.acidez < limites.maxAcidezRefinado &&
@@ -120,7 +103,7 @@ library ProductionDSL {
                 return
                     Validacion(
                         false,
-                        ResultadoValidacion.OBSERVADO,
+                        ResultadoValidacion.APROBADO,
                         "Analisis Quimico: Calidad Refinado"
                     );
             }
@@ -132,7 +115,7 @@ library ProductionDSL {
                 return
                     Validacion(
                         false,
-                        ResultadoValidacion.OBSERVADO,
+                        ResultadoValidacion.APROBADO,
                         "Analisis Quimico: Calidad Extra Virgen"
                     );
             }
@@ -144,7 +127,7 @@ library ProductionDSL {
                 return
                     Validacion(
                         false,
-                        ResultadoValidacion.OBSERVADO,
+                        ResultadoValidacion.APROBADO,
                         "Analisis Quimico: Calidad Oliva"
                     );
             }
@@ -156,7 +139,7 @@ library ProductionDSL {
                 return
                     Validacion(
                         false,
-                        ResultadoValidacion.OBSERVADO,
+                        ResultadoValidacion.APROBADO,
                         "Analisis Quimico: Calidad Virgen"
                     );
             }
@@ -165,7 +148,7 @@ library ProductionDSL {
             return
                 Validacion(
                     false,
-                    ResultadoValidacion.NO_CONFORME,
+                    ResultadoValidacion.BLOQUEADO,
                     "Analisis Quimico: Calidad Lampante"
                 );
         }
@@ -173,7 +156,7 @@ library ProductionDSL {
         return
             Validacion(
                 true,
-                ResultadoValidacion.NO_CONFORME,
+                ResultadoValidacion.BLOQUEADO,
                 "Etapa desconocida"
             );
     }

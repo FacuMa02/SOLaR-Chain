@@ -64,7 +64,7 @@ export const contract = new ethers.Contract(contractAddress, contractArtifact.ab
 export const CONTRACT_ADDRESS = contractAddress;
 
 export const ETAPAS = ["RECEPCION", "MOLIENDA", "BATIDO", "CENTRIFUGADO", "DECANTACION", "ANALISIS", "ALMACENAMIENTO"];
-export const RESULTADOS = ["APROBADO", "OBSERVADO", "NO_CONFORME", "CANCELADO"];
+export const RESULTADOS = ["APROBADO", "OBSERVADO", "BLOQUEADO", "CANCELADO"];
 
 console.log(`Conectado a RPC: ${rpcUrl}`);
 console.log(`Conectado al contrato en: ${CONTRACT_ADDRESS}`);
