@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { STAGES } from "../data/stages";
+import { STAGES, VIRTUAL_STAGES } from "../data/stages";
 import LoteCard from "../components/LoteCard";
 import ConfirmModal from "../components/ConfirmModal";
 import SideDrawer from "../components/SideDrawer";
@@ -29,6 +29,11 @@ export default function ProcesoProductivo({ toast }) {
   }, [lotes]);
 
   function onDragStart(e, lote) {
+    // No permitir arrastrar lotes en etapas virtuales (Venta)
+    if (VIRTUAL_STAGES.has(lote.stageIndex)) {
+      e.preventDefault();
+      return;
+    }
     setDrag({ loteId: lote.id, fromIndex: lote.stageIndex });
     e.dataTransfer.setData("text/plain", lote.id);
     e.dataTransfer.effectAllowed = "move";
@@ -43,6 +48,13 @@ export default function ProcesoProductivo({ toast }) {
     e.preventDefault();
     const loteId = e.dataTransfer.getData("text/plain");
     if (!loteId || !drag) return;
+
+    // No se puede soltar en la columna virtual Venta
+    if (VIRTUAL_STAGES.has(toIndex)) {
+      toast.error("Los lotes llegan a Venta automáticamente al clasificarse como Lampante.");
+      setDrag(null);
+      return;
+    }
 
     const fromIndex = drag.fromIndex;
     const lote = lotes.find((item) => item.id === loteId);
@@ -100,9 +112,10 @@ export default function ProcesoProductivo({ toast }) {
       }
 
       await lotesSvc.advanceStage(blockchainId, toIndex, {
-        peroxidos: formData.peroxidos,
+        codigoLote: lote.codigo,
+        kgAceiteNeto: formData.kgAceiteNeto,
         acidez: formData.acidez,
-        rendimiento: formData.rendimiento,
+        peroxidos: formData.peroxidos,
       });
 
       // Refrescar el tablero desde el backend para asegurar que el lote
@@ -156,10 +169,16 @@ export default function ProcesoProductivo({ toast }) {
 
         <div className="flex-1 min-h-0 overflow-x-auto">
           <div className="flex gap-3 w-max h-full pb-2">
-            {STAGES.map((stageName, idx) => (
+            {STAGES.map((stageName, idx) => {
+              const isVenta = VIRTUAL_STAGES.has(idx);
+              return (
               <div
                 key={stageName}
-                className="w-[320px] shrink-0 bg-base-200 rounded-2xl p-3 flex flex-col h-full"
+                className={`w-[320px] shrink-0 rounded-2xl p-3 flex flex-col h-full ${
+                  isVenta
+                    ? "bg-base-200/50 opacity-60"
+                    : "bg-base-200"
+                }`}
                 onDragOver={onDragOver}
                 onDrop={(e) => onDrop(e, idx)}
               >
@@ -170,13 +189,14 @@ export default function ProcesoProductivo({ toast }) {
 
                 <div className="flex-1 min-h-0 space-y-2 overflow-y-auto pr-1">
                   {(byStage.get(idx) || []).map((lote) => (
-                    <LoteCard
-                      key={lote.id}
-                      lote={lote}
-                      stageName={stageName}
-                      onClick={openDetail}
-                      onDragStart={onDragStart}
-                    />
+                    <div key={lote.id} className={isVenta ? "opacity-60" : ""}>
+                      <LoteCard
+                        lote={lote}
+                        stageName={stageName}
+                        onClick={openDetail}
+                        onDragStart={onDragStart}
+                      />
+                    </div>
                   ))}
 
                   {(byStage.get(idx) || []).length === 0 && (
@@ -186,7 +206,8 @@ export default function ProcesoProductivo({ toast }) {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -196,6 +217,8 @@ export default function ProcesoProductivo({ toast }) {
         open={!!confirm}
         title={confirm ? `${STAGES[confirm.fromIndex]} → ${STAGES[confirm.toIndex]}` : ""}
         subtitle="¿Confirmar avance de etapa?"
+        fromIndex={confirm?.fromIndex}
+        toIndex={confirm?.toIndex}
         onCancel={cancelMove}
         onConfirm={confirmMove}
         loading={confirmLoading}
@@ -231,6 +254,21 @@ export default function ProcesoProductivo({ toast }) {
                 {selected.estado && (
                   <div>
                     <span className="font-medium">Estado:</span> {selected.estado}
+                  </div>
+                )}
+                {selected.rendimiento !== null && selected.rendimiento !== undefined && Number(selected.rendimiento) > 0 && (
+                  <div>
+                    <span className="font-medium">Rendimiento industrial (RI):</span> {selected.rendimiento}%
+                  </div>
+                )}
+                {selected.acidez !== null && selected.acidez !== undefined && (
+                  <div>
+                    <span className="font-medium">Acidez:</span> {selected.acidez}%
+                  </div>
+                )}
+                {selected.peroxidos !== null && selected.peroxidos !== undefined && (
+                  <div>
+                    <span className="font-medium">Peróxidos:</span> {selected.peroxidos} meq O₂/kg
                   </div>
                 )}
                 <div>

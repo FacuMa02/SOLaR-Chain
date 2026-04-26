@@ -133,8 +133,14 @@ export async function fetchTablero() {
     return {
       id: l.codigo_lote,
       codigo: l.codigo_lote,
+      fechaInicio: l.fecha_inicio,
       variedad: l.variedad,
       kg: l.peso_kg,
+      calidad: l.calidad || null,
+      kgAceiteNeto: l.kg_aceite_neto,
+      rendimiento: l.rendimiento,
+      acidez: l.acidez,
+      peroxidos: l.peroxidos,
       etapa_actual: l.etapa_actual,
       stageIndex,
       estado: l.estado,
@@ -149,26 +155,27 @@ export async function fetchTablero() {
  * dato necesario de la base de datos.
  */
 export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPayload, maybePayload) {
-  // Soporte: advanceStage(blockchainId, etapa, { peroxidos, acidez, rendimiento })
+  // Soporte: advanceStage(blockchainId, etapa, { kgAceiteNeto, acidez, peroxidos })
   // o advanceStage(codigoLote, etapa) (legacy) — prefer blockchainId usage.
   let payload = {};
   if (maybePayload) {
     // called as (blockchainId, etapa, payload)
     payload = {
       idLoteBlockchain: codigoLoteOrBlockchainId,
+      codigoLote: maybePayload.codigoLote,
       etapa: toStageIndexOrPayload,
-      peroxidos: maybePayload.peroxidos || 0,
+      kgAceiteNeto: maybePayload.kgAceiteNeto || 0,
       acidez: maybePayload.acidez || 0,
-      rendimiento: maybePayload.rendimiento || 0,
+      peroxidos: maybePayload.peroxidos || 0,
     };
   } else if (typeof toStageIndexOrPayload === "object") {
     // called as (codigoLote, payload)
     payload = {
       codigoLote: codigoLoteOrBlockchainId,
       etapa: toStageIndexOrPayload.etapa,
-      peroxidos: toStageIndexOrPayload.peroxidos || 0,
+      kgAceiteNeto: toStageIndexOrPayload.kgAceiteNeto || 0,
       acidez: toStageIndexOrPayload.acidez || 0,
-      rendimiento: toStageIndexOrPayload.rendimiento || 0,
+      peroxidos: toStageIndexOrPayload.peroxidos || 0,
     };
   } else {
     // called as (codigoLote, etapa)

@@ -29,6 +29,47 @@ function hasMetric(value) {
   return value !== null && value !== undefined && Number(value) !== 0;
 }
 
+function parseMotivo(motivo) {
+  if (!motivo) {
+    return {
+      descripcion: "Sin observaciones",
+      metricas: {},
+    };
+  }
+
+  if (typeof motivo !== "string") {
+    return {
+      descripcion: String(motivo),
+      metricas: {},
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(motivo);
+    if (!parsed || typeof parsed !== "object") {
+      return {
+        descripcion: motivo,
+        metricas: {},
+      };
+    }
+
+    return {
+      descripcion: parsed.motivo || "Sin observaciones",
+      metricas: {
+        rendimiento: parsed.rendimiento,
+        kgAceiteNeto: parsed.kgAceiteNeto,
+        acidez: parsed.acidez,
+        peroxidos: parsed.peroxidos,
+      },
+    };
+  } catch {
+    return {
+      descripcion: motivo,
+      metricas: {},
+    };
+  }
+}
+
 function AuditoriaBadge({ auditoria, auditando }) {
   if (auditando) {
     return (
@@ -109,29 +150,40 @@ export default function HistorialLote({ lote, eventos, loading, error, onExport,
           <div className="absolute left-2 top-2 bottom-2 w-[2px] bg-primary/60" />
 
           <div className="space-y-6">
-            {eventos.map((evento, index) => (
-              <article key={`${evento.fecha_hora || index}-${evento.etapa}-${evento.resultado}`} className="relative">
-                <div className={`absolute -left-8 top-2 h-4 w-4 rounded-full border-2 border-primary ${pointClass(evento.resultado)}`} />
+            {eventos.map((evento, index) => {
+              const motivoFormateado = parseMotivo(evento.motivo);
+              const metricas = {
+                rendimiento: evento.rendimiento ?? motivoFormateado.metricas.rendimiento,
+                kgAceiteNeto: motivoFormateado.metricas.kgAceiteNeto,
+                acidez: evento.acidez ?? motivoFormateado.metricas.acidez,
+                peroxidos: evento.peroxidos ?? motivoFormateado.metricas.peroxidos,
+              };
 
-                <p className="text-xs text-base-content/55">{formatDate(evento.fecha_hora)}</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {evento.etapa} · {evento.resultado}
-                </p>
-                <p className="mt-1 text-sm text-base-content/80">{evento.motivo || "Sin observaciones"}</p>
+              return (
+                <article key={`${evento.fecha_hora || index}-${evento.etapa}-${evento.resultado}`} className="relative">
+                  <div className={`absolute -left-8 top-2 h-4 w-4 rounded-full border-2 border-primary ${pointClass(evento.resultado)}`} />
 
-                {(hasMetric(evento.rendimiento) || hasMetric(evento.acidez) || hasMetric(evento.peroxidos)) && (
-                  <p className="mt-1 text-xs text-base-content/65">
-                    {hasMetric(evento.rendimiento) ? `Rendimiento: ${evento.rendimiento} ` : ""}
-                    {hasMetric(evento.acidez) ? `Acidez: ${evento.acidez} ` : ""}
-                    {hasMetric(evento.peroxidos) ? `Peróxidos: ${evento.peroxidos}` : ""}
+                  <p className="text-xs text-base-content/55">{formatDate(evento.fecha_hora)}</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {evento.etapa} · {evento.resultado}
                   </p>
-                )}
+                  <p className="mt-1 text-sm text-base-content/80">{motivoFormateado.descripcion}</p>
 
-                {evento.tx_hash && (
-                  <p className="mt-1 text-xs text-base-content/60">Tx: {evento.tx_hash}</p>
-                )}
-              </article>
-            ))}
+                  {(hasMetric(metricas.rendimiento) || hasMetric(metricas.kgAceiteNeto) || hasMetric(metricas.acidez) || hasMetric(metricas.peroxidos)) && (
+                    <p className="mt-1 text-xs text-base-content/65">
+                      {hasMetric(metricas.rendimiento) ? `Rendimiento: ${metricas.rendimiento} ` : ""}
+                      {hasMetric(metricas.kgAceiteNeto) ? `Kg aceite neto: ${metricas.kgAceiteNeto} ` : ""}
+                      {hasMetric(metricas.acidez) ? `Acidez: ${metricas.acidez} ` : ""}
+                      {hasMetric(metricas.peroxidos) ? `Peróxidos: ${metricas.peroxidos}` : ""}
+                    </p>
+                  )}
+
+                  {evento.tx_hash && (
+                    <p className="mt-1 text-xs text-base-content/60">Tx: {evento.tx_hash}</p>
+                  )}
+                </article>
+              );
+            })}
           </div>
         </div>
       )}

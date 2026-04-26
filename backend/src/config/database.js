@@ -314,6 +314,14 @@ export async function initDB() {
 
     await normalizeLotesTable(db);
 
+    // Migración incremental: añadir columna calidad si no existe
+    const lotesColumns = await db.all("PRAGMA table_info(lotes)");
+    const lotesColNames = new Set(lotesColumns.map((c) => c.name));
+    if (!lotesColNames.has("calidad")) {
+        await db.exec("ALTER TABLE lotes ADD COLUMN calidad TEXT");
+        console.log("Migracion aplicada: lotes.calidad");
+    }
+
     await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lotes_codigo_lote_unique ON lotes(codigo_lote);`);
 
     await db.exec(`

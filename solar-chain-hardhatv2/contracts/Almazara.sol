@@ -11,6 +11,7 @@ contract Almazara {
         string idBaseDatos; // Hash o ID de SQLite
         string variedad; // ej: "Arbequina", "Picual"
         uint256 pesoKg; // Peso asignado a este lote
+        uint256 kgAceiteNeto; // Última masa neta de aceite registrada
         ProductionDSL.Etapa etapaActual;
         ProductionDSL.ResultadoValidacion estadoCalidad;
         ProductionDSL.KPIs kpis;
@@ -70,8 +71,10 @@ contract Almazara {
             maxAcidezExtra: 80,
             maxAcidezVirgen: 200,
             maxAcidezCorriente: 330,
+            maxAcidezRefinado: 30,
+            maxAcidezOliva: 100,
             maxPeroxidosVirgen: 20,
-            maxPeroxidosCorriente: 15,
+            maxPeroxidosOliva: 15,
             maxPeroxidosRefinado: 5,
             minRendimiento: 10
         });
@@ -81,16 +84,20 @@ contract Almazara {
         uint256 _maxAcidezExtra,
         uint256 _maxAcidezVirgen,
         uint256 _maxAcidezCorriente,
+        uint256 _maxAcidezRefinado,
+        uint256 _maxAcidezOliva,
         uint256 _maxPeroxidosVirgen,
-        uint256 _maxPeroxidosCorriente,
+        uint256 _maxPeroxidosOliva,
         uint256 _maxPeroxidosRefinado,
         uint256 _minRendimiento
     ) external onlyOwner {
         limitesActuales.maxAcidezExtra = _maxAcidezExtra;
         limitesActuales.maxAcidezVirgen = _maxAcidezVirgen;
         limitesActuales.maxAcidezCorriente = _maxAcidezCorriente;
+        limitesActuales.maxAcidezRefinado = _maxAcidezRefinado;
+        limitesActuales.maxAcidezOliva = _maxAcidezOliva;
         limitesActuales.maxPeroxidosVirgen = _maxPeroxidosVirgen;
-        limitesActuales.maxPeroxidosCorriente = _maxPeroxidosCorriente;
+        limitesActuales.maxPeroxidosOliva = _maxPeroxidosOliva;
         limitesActuales.maxPeroxidosRefinado = _maxPeroxidosRefinado;
         limitesActuales.minRendimiento = _minRendimiento;
 
@@ -109,6 +116,7 @@ contract Almazara {
             idBaseDatos: _idBaseDatos,
             variedad: _variedad,
             pesoKg: _pesoKg,
+            kgAceiteNeto: 0,
             etapaActual: ProductionDSL.Etapa.RECEPCION,
             estadoCalidad: ProductionDSL.ResultadoValidacion.APROBADO,
             kpis: ProductionDSL.KPIs(0, 0, 0),
@@ -127,7 +135,7 @@ contract Almazara {
     function avanzarEtapa(
         uint256 _idLote,
         ProductionDSL.Etapa _siguienteEtapa,
-        uint256 _rendimiento,
+        uint256 _kgAceiteNeto,
         uint256 _acidez,
         uint256 _peroxidos
     ) public {
@@ -144,8 +152,20 @@ contract Almazara {
             revert TransicionInvalida(lote.etapaActual, _siguienteEtapa);
         }
 
+        // Calcular rendimiento industrial: RI = (kgAceiteNeto / pesoKg) * 100
+        // Aplica para DECANTACION (rendimiento estimado) y ALMACENAMIENTO (rendimiento definitivo)
+        uint256 rendimientoCalculado = 0;
+        if (
+            (_siguienteEtapa == ProductionDSL.Etapa.DECANTACION ||
+                _siguienteEtapa == ProductionDSL.Etapa.ALMACENAMIENTO) &&
+            lote.pesoKg > 0 &&
+            _kgAceiteNeto > 0
+        ) {
+            rendimientoCalculado = (_kgAceiteNeto * 100) / lote.pesoKg;
+        }
+
         ProductionDSL.KPIs memory nuevosKPIs = ProductionDSL.KPIs(
-            _rendimiento,
+            rendimientoCalculado,
             _acidez,
             _peroxidos
         );
@@ -160,6 +180,7 @@ contract Almazara {
         }
 
         lote.etapaActual = _siguienteEtapa;
+        lote.kgAceiteNeto = _kgAceiteNeto;
         lote.kpis = nuevosKPIs;
         lote.estadoCalidad = validacion.resultado;
         lote.observaciones = validacion.motivo;

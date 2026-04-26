@@ -118,11 +118,11 @@ export async function createLoteOnChain(hashIntegridad, variedad, pesoKg) {
     };
 }
 
-export async function advanceLoteOnChain(idLoteBlockchain, etapa, rendimiento, acidez, peroxidos) {
+export async function advanceLoteOnChain(idLoteBlockchain, etapa, kgAceiteNeto, acidez, peroxidos) {
     await contract.avanzarEtapa.staticCall(
         idLoteBlockchain,
         etapa,
-        Number(rendimiento) || 0,
+        Number(kgAceiteNeto) || 0,
         Number(acidez) || 0,
         Number(peroxidos) || 0
     );
@@ -130,7 +130,7 @@ export async function advanceLoteOnChain(idLoteBlockchain, etapa, rendimiento, a
     const tx = await contract.avanzarEtapa(
         idLoteBlockchain,
         etapa,
-        Number(rendimiento) || 0,
+        Number(kgAceiteNeto) || 0,
         Number(acidez) || 0,
         Number(peroxidos) || 0,
         { gasLimit: 500000 }
