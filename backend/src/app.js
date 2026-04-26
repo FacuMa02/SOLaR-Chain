@@ -1,91 +1,54 @@
-import 'dotenv/config';
-import express, { json } from "express";
+import express from "express";
 import cors from "cors";
-import { contract } from "./config/blockchain.js";
-import { ethers } from "ethers";
+import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+import { initDB } from "./config/database.js";
+import { initHistoryDB } from "./config/history_db.js";
+import { assertBlockchainReady } from "./config/blockchain.js";
+import authRoutes from "./routes/auth.js";
+import loteRoutes from "./routes/lote.js";
+import remitoRoutes from "./routes/remito.js";
+import analiticasRoutes from "./routes/analiticas.js";
+import tolvaRoutes from "./routes/tolva.js";
+import requireAuth from "./middleware/requireAuth.js";
 
+dotenv.config();
 const app = express();
+app.use(express.json());
+app.use(cookieParser());
+app.use(cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+}));
 
-// Middlewares
-app.use(json()); // Para que entienda JSON en el body
-app.use(cors());
-
-// RUTA 1: Obtener información de un Lote (GET)
-app.get("/lote/:id", async (req, res) => {
+async function startServer() {
     try {
-        const id = req.params.id;
+        // 1. INICIALIZAR LAS BASES DE DATOS PRIMERO
+        console.log("Inicializando bases de datos...");
+        await initDB();
+        await initHistoryDB();
+        console.log("Bases de datos listas.");
 
-        // Llamada al contrato (Lectura)
-        const lote = await contract.getLote(id);
+        console.log("Verificando conexión con Ganache y contrato...");
+        await assertBlockchainReady();
 
-        // Formatear la respuesta (Solidity devuelve BigInts que JSON no entiende directo)
-        const respuesta = {
-            id: lote.id.toString(),
-            nroRemito: lote.nroRemito, // 0, 1, 2...
-            etapaActual: lote.etapaActual.toString(),
-            creadoPor: lote.creadoPor,
-            timestamp: new Date(Number(lote.timestamp) * 1000).toISOString()
-        };
+        // 2. REGISTRAR LAS RUTAS DESPUÉS
+        app.use('/api/auth', authRoutes); // Asegúrate de que el nombre coincida con tu importación
+        app.use('/api/lotes', requireAuth, loteRoutes);
+        app.use('/api/remitos', requireAuth, remitoRoutes);
+        app.use('/api/tolva', requireAuth, tolvaRoutes);
+        app.use("/api/analiticas", requireAuth, analiticasRoutes);
 
-        res.json({ success: true, data: respuesta });
-    } catch (error) {
-        console.error("Error al leer lote:", error);
-        res.status(500).json({ success: false, error: "Error al leer de Blockchain" });
-    }
-});
-
-// RUTA 2: Crear un Lote (POST)
-app.post("/crear-lote", async (req, res) => {
-    try {
-        // 1. Recibimos los datos del formulario de Recepción
-        const { nroRemito, kilos } = req.body;
-
-        if (!nroRemito || !kilos) {
-            return res.status(400).json({ error: "Faltan datos (codigo o kilos)" });
-        }
-
-        console.log(`Creando lote: ${nroRemito} (${kilos} kg)`);
-
-        // 2. Enviamos a la Blockchain (Argumentos: string, uint)
-        const tx = await contract.crearLote(nroRemito, kilos);
-
-        await tx.wait();
-
-        res.json({
-            success: true,
-            message: "Lote creado y anclado en Blockchain",
-            txHash: tx.hash
+        // 3. LEVANTAR EL SERVIDOR AL FINAL
+        const PORT = process.env.PORT || 3000;
+        app.listen(PORT, () => {
+            console.log(`Servidor escuchando en el puerto ${PORT}`);
         });
 
     } catch (error) {
-        console.error("Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Error crítico al arrancar el servidor:", error);
+        process.exit(1); // Detiene la aplicación si la BD falla
     }
-});
+}
 
-//RUTA 3: Avanzar etapa
-app.post("/avanzar-etapa", async (req, res) => {
-    try {
-        const { idLote, etapa, rendimiento, acidez, peroxidos } = req.body;
-
-        const tx = await contract.avanzarEtapa(
-            idLote,
-            etapa,
-            rendimiento,
-            acidez,
-            peroxidos
-        );
-
-        await tx.wait();
-        res.send("Datos guardados en Blockchain");
-    } catch (error) {
-        res.status(500).json({ success: false, error: "Transacción inválida" })
-    }
-})
-
-
-// Iniciar servidor
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor Backend corriendo en http://localhost:${PORT}`);
-});
+startServer();

@@ -2,157 +2,162 @@
 pragma solidity ^0.8.20;
 
 library ProductionDSL {
-    /* =======================
-            ENUMS
-    ======================= */
-
     enum Etapa {
-        RECEPCION,
-        MOLIENDA,
-        BATIDO,
-        CENTRIFUGADO,
-        DECANTACION,
-        ANALISIS,
-        ALMACENAMIENTO
+        RECEPCION, // 0
+        MOLIENDA, // 1
+        BATIDO, // 2
+        CENTRIFUGADO, // 3 (Acidez y Peróxidos)
+        DECANTACION, // 4
+        ANALISIS, // 5 (Rendimiento)
+        ALMACENAMIENTO // 6
     }
 
+    // AÑADIDO: Estado CANCELADO
     enum ResultadoValidacion {
         APROBADO,
         OBSERVADO,
-        NO_CONFORME
+        BLOQUEADO,
+        CANCELADO
     }
-
-    /* =======================
-            KPI STRUCT
-    ======================= */
 
     struct KPIs {
-        uint256 rendimiento; // porcentaje (ej: 6 = 6%)
-        uint256 acidez; // índice de acidez
-        uint256 peroxidos; // índice de peróxidos
+        uint256 rendimiento;
+        uint256 acidez;
+        uint256 peroxidos;
     }
 
-    /* =======================
-        VALIDATION RESULT
-    ======================= */
+    // ACTUALIZADO: Variables de peróxidos específicas
+    struct LimitesKPI {
+        uint256 maxAcidezExtra; // ej: 80 (0.8%)
+        uint256 maxAcidezVirgen; // ej: 200 (2.0%)
+        uint256 maxAcidezCorriente; // ej: 330 (3.3%)
+        uint256 maxAcidezRefinado; // ej: 30 (0.3%)
+        uint256 maxAcidezOliva; // ej: 100 (1.0%)
+        uint256 maxPeroxidosVirgen; // <= 20 (Aplica a AOVE y Virgen)
+        uint256 maxPeroxidosOliva; // <= 15
+        uint256 maxPeroxidosRefinado; // <= 5
+        uint256 minRendimiento; // ej: 10
+    }
 
     struct Validacion {
-        bool aplica;
+        bool esBloqueante;
         ResultadoValidacion resultado;
         string motivo;
     }
-
-    /* =======================
-        TRANSITION CHECK
-    ======================= */
-
-    function validarEtapa(
-        Etapa etapa,
-        KPIs memory kpis
-    ) internal pure returns (Validacion memory) {
-        // Etapas SIN validación de KPIs
-        if (
-            etapa == Etapa.RECEPCION ||
-            etapa == Etapa.MOLIENDA ||
-            etapa == Etapa.BATIDO ||
-            etapa == Etapa.CENTRIFUGADO ||
-            etapa == Etapa.DECANTACION
-        ) {
-            return
-                Validacion({
-                    aplica: false,
-                    resultado: ResultadoValidacion.APROBADO,
-                    motivo: "Etapa sin validacion de KPIs"
-                });
-        }
-
-        // Etapa EXTRACCION (rendimiento)
-        if (etapa == Etapa.CENTRIFUGADO) {
-            if (kpis.rendimiento >= 10) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.APROBADO,
-                        "Rendimiento ideal"
-                    );
-            }
-            if (kpis.rendimiento >= 6) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.OBSERVADO,
-                        "Rendimiento aceptable"
-                    );
-            }
-            return
-                Validacion(
-                    true,
-                    ResultadoValidacion.NO_CONFORME,
-                    "Rendimiento bajo"
-                );
-        }
-
-        // Etapa ANALISIS (acidez + peroxidos)
-        if (etapa == Etapa.ANALISIS) {
-            if (kpis.acidez <= 8 && kpis.peroxidos <= 20) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.APROBADO,
-                        "Parametros dentro de norma"
-                    );
-            }
-
-            if (kpis.acidez <= 12 && kpis.peroxidos <= 25) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.OBSERVADO,
-                        "Parametros fuera del ideal"
-                    );
-            }
-
-            return
-                Validacion(
-                    true,
-                    ResultadoValidacion.NO_CONFORME,
-                    "Parametros fuera de norma"
-                );
-        }
-
-        // Etapa ALMACENAMIENTO (solo confirmación)
-        if (etapa == Etapa.ALMACENAMIENTO) {
-            return
-                Validacion({
-                    aplica: false,
-                    resultado: ResultadoValidacion.APROBADO,
-                    motivo: "Cierre del proceso productivo"
-                });
-        }
-
-        revert("Etapa no contemplada en DSL");
-    }
-
-    /* =======================
-        TRANSICIONES VALIDAS
-    ======================= */
 
     function esTransicionValida(
         Etapa actual,
         Etapa siguiente
     ) internal pure returns (bool) {
-        if (actual == Etapa.RECEPCION && siguiente == Etapa.MOLIENDA)
-            return true;
-        if (actual == Etapa.MOLIENDA && siguiente == Etapa.BATIDO) return true;
-        if (actual == Etapa.BATIDO && siguiente == Etapa.CENTRIFUGADO)
-            return true;
-        if (actual == Etapa.CENTRIFUGADO && siguiente == Etapa.DECANTACION)
-            return true;
-        if (actual == Etapa.DECANTACION && siguiente == Etapa.ANALISIS)
-            return true;
-        if (actual == Etapa.ANALISIS && siguiente == Etapa.ALMACENAMIENTO)
-            return true;
-
+        if (uint(siguiente) == uint(actual) + 1) return true;
         return false;
+    }
+
+    function validarEtapa(
+        Etapa etapa,
+        KPIs memory kpis,
+        LimitesKPI memory limites
+    ) internal pure returns (Validacion memory) {
+        // Etapas sin validación de KPIs
+        if (
+            etapa == Etapa.RECEPCION ||
+            etapa == Etapa.MOLIENDA ||
+            etapa == Etapa.BATIDO ||
+            etapa == Etapa.CENTRIFUGADO
+        ) {
+            return
+                Validacion(false, ResultadoValidacion.APROBADO, "Transito OK");
+        }
+
+        // DECANTACION: validar rendimiento estimado (kgAceite / kgAceituna * 100)
+        if (etapa == Etapa.DECANTACION) {
+            if (kpis.rendimiento >= limites.minRendimiento) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Rendimiento Estimado Optimo"
+                    );
+            }
+            return
+                Validacion(
+                    false,
+                    ResultadoValidacion.OBSERVADO,
+                    "Rendimiento Estimado Bajo"
+                );
+        }
+
+        // ANALISIS: sin validación de KPIs
+        if (etapa == Etapa.ANALISIS) {
+            return
+                Validacion(false, ResultadoValidacion.APROBADO, "Transito OK");
+        }
+
+        // ALMACENAMIENTO: clasificación por Acidez + Peróxidos + rendimiento definitivo
+        if (etapa == Etapa.ALMACENAMIENTO) {
+            // Refinado: Acidez < 0.3% y Peróxidos <= 5
+            if (
+                kpis.acidez < limites.maxAcidezRefinado &&
+                kpis.peroxidos <= limites.maxPeroxidosRefinado
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Analisis Quimico: Calidad Refinado"
+                    );
+            }
+            // Extra Virgen: Acidez < 0.8% y Peróxidos <= 20
+            if (
+                kpis.acidez < limites.maxAcidezExtra &&
+                kpis.peroxidos <= limites.maxPeroxidosVirgen
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Analisis Quimico: Calidad Extra Virgen"
+                    );
+            }
+            // Oliva: Acidez < 1.0% y Peróxidos <= 15
+            if (
+                kpis.acidez < limites.maxAcidezOliva &&
+                kpis.peroxidos <= limites.maxPeroxidosOliva
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Analisis Quimico: Calidad Oliva"
+                    );
+            }
+            // Virgen: Acidez < 2.0% y Peróxidos <= 20
+            if (
+                kpis.acidez < limites.maxAcidezVirgen &&
+                kpis.peroxidos <= limites.maxPeroxidosVirgen
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Analisis Quimico: Calidad Virgen"
+                    );
+            }
+
+            // Lampante: fuera de todos los rangos de calidad
+            return
+                Validacion(
+                    false,
+                    ResultadoValidacion.BLOQUEADO,
+                    "Analisis Quimico: Calidad Lampante"
+                );
+        }
+
+        return
+            Validacion(
+                true,
+                ResultadoValidacion.BLOQUEADO,
+                "Etapa desconocida"
+            );
     }
 }

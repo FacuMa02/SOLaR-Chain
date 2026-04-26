@@ -1,106 +1,191 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// Importamos tu librería con las reglas hardcodeadas
 import "./TrazabilidadDSL.sol";
 
 contract Almazara {
-    // Usamos los tipos de datos definidos en tu DSL
     using ProductionDSL for ProductionDSL.Etapa;
 
     struct Lote {
         uint256 id;
-        string nroRemito;
-        uint256 kgIniciales;
+        string idBaseDatos; // Hash o ID de SQLite
+        string variedad; // ej: "Arbequina", "Picual"
+        uint256 pesoKg; // Peso asignado a este lote
+        uint256 kgAceiteNeto; // Última masa neta de aceite registrada
         ProductionDSL.Etapa etapaActual;
-        ProductionDSL.ResultadoValidacion estadoCalidad; // APROBADO, OBSERVADO, NO_CONFORME
-        ProductionDSL.KPIs kpis; // Rendimiento, Acidez, Peroxidos
+        ProductionDSL.ResultadoValidacion estadoCalidad;
+        ProductionDSL.KPIs kpis;
         string observaciones;
-        address creadoPor;
-        uint256 timestamp;
+        uint256 timestamp; // Fecha de inicio de molienda
     }
 
-    // Almacenamiento
     mapping(uint256 => Lote) public lotes;
     uint256 public contadorLotes;
 
-    // Eventos para el Frontend (y para el Indexer)
-    event LoteCreado(uint256 indexed id, address creador);
+    // --- VARIABLES DE CONFIGURACIÓN ---
+    ProductionDSL.LimitesKPI public limitesActuales;
+    address public owner;
+
+    // --- EVENTOS ---
+
+    event LoteCreado(
+        uint256 indexed idSC,
+        string idBaseDatos,
+        string variedad,
+        uint256 pesoKg,
+        uint256 timestamp
+    );
     event AvanceEtapa(
-        uint256 indexed id,
+        uint256 indexed idSC,
         ProductionDSL.Etapa etapa,
         ProductionDSL.ResultadoValidacion resultado,
         string motivo
     );
+    event TransicionInvalidaRegistrada(
+        uint256 indexed idSC,
+        ProductionDSL.Etapa etapaActual,
+        ProductionDSL.Etapa etapaSolicitada,
+        string motivo,
+        uint256 timestamp
+    );
+    event LimitesActualizados(uint256 timestamp);
+    event LoteCancelado(uint256 indexed idSC, string motivo, uint256 timestamp);
 
-    // --- FUNCIÓN DE INICIO ---
+    // --- ERRORES ---
+    error TransicionInvalida(
+        ProductionDSL.Etapa actual,
+        ProductionDSL.Etapa solicitada
+    );
+    error LoteNoExiste(uint256 id);
+    error NoAutorizado();
+    error LoteBloqueadoPorCancelacion();
 
-    function crearLote(string memory _nroRemito, uint256 _kilos) public {
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NoAutorizado();
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+        limitesActuales = ProductionDSL.LimitesKPI({
+            maxAcidezExtra: 80,
+            maxAcidezVirgen: 200,
+            maxAcidezCorriente: 330,
+            maxAcidezRefinado: 30,
+            maxAcidezOliva: 100,
+            maxPeroxidosVirgen: 20,
+            maxPeroxidosOliva: 15,
+            maxPeroxidosRefinado: 5,
+            minRendimiento: 10
+        });
+    }
+
+    function setLimitesKPI(
+        uint256 _maxAcidezExtra,
+        uint256 _maxAcidezVirgen,
+        uint256 _maxAcidezCorriente,
+        uint256 _maxAcidezRefinado,
+        uint256 _maxAcidezOliva,
+        uint256 _maxPeroxidosVirgen,
+        uint256 _maxPeroxidosOliva,
+        uint256 _maxPeroxidosRefinado,
+        uint256 _minRendimiento
+    ) external onlyOwner {
+        limitesActuales.maxAcidezExtra = _maxAcidezExtra;
+        limitesActuales.maxAcidezVirgen = _maxAcidezVirgen;
+        limitesActuales.maxAcidezCorriente = _maxAcidezCorriente;
+        limitesActuales.maxAcidezRefinado = _maxAcidezRefinado;
+        limitesActuales.maxAcidezOliva = _maxAcidezOliva;
+        limitesActuales.maxPeroxidosVirgen = _maxPeroxidosVirgen;
+        limitesActuales.maxPeroxidosOliva = _maxPeroxidosOliva;
+        limitesActuales.maxPeroxidosRefinado = _maxPeroxidosRefinado;
+        limitesActuales.minRendimiento = _minRendimiento;
+
+        emit LimitesActualizados(block.timestamp);
+    }
+
+    // --- ACTUALIZADO: Crear Lote ahora consume de la Tolva ---
+    function crearLote(
+        string memory _idBaseDatos,
+        string memory _variedad,
+        uint256 _pesoKg
+    ) public {
         contadorLotes++;
-
         lotes[contadorLotes] = Lote({
             id: contadorLotes,
-            nroRemito: _nroRemito, // Guardamos el vínculo
-            kgIniciales: _kilos, // Guardamos el peso
+            idBaseDatos: _idBaseDatos,
+            variedad: _variedad,
+            pesoKg: _pesoKg,
+            kgAceiteNeto: 0,
             etapaActual: ProductionDSL.Etapa.RECEPCION,
             estadoCalidad: ProductionDSL.ResultadoValidacion.APROBADO,
             kpis: ProductionDSL.KPIs(0, 0, 0),
-            observaciones: "Recepcion de materia prima",
-            creadoPor: msg.sender,
+            observaciones: "Inicio de Molienda",
             timestamp: block.timestamp
         });
-
-        // Emitimos el evento con el código externo para facilitar búsquedas
-        emit LoteCreado(contadorLotes, msg.sender);
+        emit LoteCreado(
+            contadorLotes,
+            _idBaseDatos,
+            _variedad,
+            _pesoKg,
+            block.timestamp
+        );
     }
 
-    // --- MOTOR ÚNICO DE TRANSICIÓN ---
-
-    /**
-     * @dev Esta función única maneja CUALQUIER cambio de etapa.
-     * La lógica de si está bien o mal está delegada totalmente en ProductionDSL.
-     */
     function avanzarEtapa(
         uint256 _idLote,
         ProductionDSL.Etapa _siguienteEtapa,
-        uint256 _rendimiento,
+        uint256 _kgAceiteNeto,
         uint256 _acidez,
         uint256 _peroxidos
     ) public {
+        if (lotes[_idLote].id == 0) revert LoteNoExiste(_idLote);
         Lote storage lote = lotes[_idLote];
 
-        // 1. VALIDACIÓN DE FLUJO (BLOQUEANTE) [cite: 113]
-        // Usamos la función esTransicionValida de tu librería.
-        // Si intentan saltar de Molienda a Analisis, esto revierte la transacción.
-        require(
-            ProductionDSL.esTransicionValida(lote.etapaActual, _siguienteEtapa),
-            "DSL: Transicion de etapa no permitida por el flujo"
+        if (lote.estadoCalidad == ProductionDSL.ResultadoValidacion.CANCELADO) {
+            revert LoteBloqueadoPorCancelacion();
+        }
+
+        if (
+            !ProductionDSL.esTransicionValida(lote.etapaActual, _siguienteEtapa)
+        ) {
+            revert TransicionInvalida(lote.etapaActual, _siguienteEtapa);
+        }
+
+        // Calcular rendimiento industrial: RI = (kgAceiteNeto / pesoKg) * 100
+        // Aplica para DECANTACION (rendimiento estimado) y ALMACENAMIENTO (rendimiento definitivo)
+        uint256 rendimientoCalculado = 0;
+        if (
+            (_siguienteEtapa == ProductionDSL.Etapa.DECANTACION ||
+                _siguienteEtapa == ProductionDSL.Etapa.ALMACENAMIENTO) &&
+            lote.pesoKg > 0 &&
+            _kgAceiteNeto > 0
+        ) {
+            rendimientoCalculado = (_kgAceiteNeto * 100) / lote.pesoKg;
+        }
+
+        ProductionDSL.KPIs memory nuevosKPIs = ProductionDSL.KPIs(
+            rendimientoCalculado,
+            _acidez,
+            _peroxidos
         );
-
-        // 2. PREPARAR DATOS
-        ProductionDSL.KPIs memory nuevosKPIs = ProductionDSL.KPIs({
-            rendimiento: _rendimiento,
-            acidez: _acidez,
-            peroxidos: _peroxidos
-        });
-
-        // 3. VALIDACIÓN DE REGLAS DE NEGOCIO (NO BLOQUEANTE) [cite: 97]
-        // Le preguntamos a la librería qué opina de estos datos para esta etapa
         ProductionDSL.Validacion memory validacion = ProductionDSL.validarEtapa(
             _siguienteEtapa,
-            nuevosKPIs
+            nuevosKPIs,
+            limitesActuales
         );
 
-        // 4. ACTUALIZAR ESTADO (PERSISTENCIA)
-        // Guardamos los datos independientemente de si fue APROBADO o NO_CONFORME
-        // para garantizar la trazabilidad real (incluyendo errores).
+        if (validacion.esBloqueante) {
+            revert(validacion.motivo);
+        }
+
         lote.etapaActual = _siguienteEtapa;
+        lote.kgAceiteNeto = _kgAceiteNeto;
         lote.kpis = nuevosKPIs;
         lote.estadoCalidad = validacion.resultado;
         lote.observaciones = validacion.motivo;
         lote.timestamp = block.timestamp;
 
-        // 5. EMITIR EVENTO
         emit AvanceEtapa(
             _idLote,
             _siguienteEtapa,
@@ -109,10 +194,42 @@ contract Almazara {
         );
     }
 
-    // --- FUNCIONES AUXILIARES (GETTERS) ---
+    function cancelarLote(
+        uint256 _idLote,
+        string memory _motivo
+    ) public onlyOwner {
+        if (lotes[_idLote].id == 0) revert LoteNoExiste(_idLote);
+        Lote storage lote = lotes[_idLote];
 
-    // Función útil para que tu frontend sepa qué datos tiene el lote
+        if (lote.estadoCalidad == ProductionDSL.ResultadoValidacion.CANCELADO) {
+            revert("El lote ya se encuentra cancelado");
+        }
+
+        lote.estadoCalidad = ProductionDSL.ResultadoValidacion.CANCELADO;
+        lote.observaciones = _motivo;
+        lote.timestamp = block.timestamp;
+
+        emit LoteCancelado(_idLote, _motivo, block.timestamp);
+    }
+
+    function registrarTransicionInvalida(
+        uint256 _idLote,
+        ProductionDSL.Etapa _etapaSolicitada,
+        string memory _motivo
+    ) public onlyOwner {
+        if (lotes[_idLote].id == 0) revert LoteNoExiste(_idLote);
+
+        emit TransicionInvalidaRegistrada(
+            _idLote,
+            lotes[_idLote].etapaActual,
+            _etapaSolicitada,
+            _motivo,
+            block.timestamp
+        );
+    }
+
     function getLote(uint256 _id) public view returns (Lote memory) {
+        if (lotes[_id].id == 0) revert LoteNoExiste(_id);
         return lotes[_id];
     }
 }
