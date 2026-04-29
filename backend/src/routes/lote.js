@@ -785,6 +785,7 @@ router.get("/tablero", async (req, res) => {
     try {
         const lotesActivos = await db.all(
             `SELECT 
+                l.id_lote,
                 l.blockchain_id, 
                 l.codigo_lote, 
                 l.fecha_inicio,
@@ -793,6 +794,7 @@ router.get("/tablero", async (req, res) => {
                 e.nombre AS etapa_actual, 
                 ev.nombre AS estado, 
                 l.calidad,
+                l.litros_restantes,
                 CASE
                     WHEN l.id_etapa = 6 AND l.id_estado_validacion = 2 THEN 7
                     ELSE l.id_etapa
@@ -836,6 +838,7 @@ router.get("/tablero", async (req, res) => {
             }
 
             return {
+                id_lote: lote.id_lote,
                 ...lote,
                 calidad: calidadFinal,
                 kg_aceite_neto: loteSC ? Number(loteSC.kgAceiteNeto) : null,
@@ -843,6 +846,7 @@ router.get("/tablero", async (req, res) => {
                 // Acidez on-chain está normalizada x100; para UI se devuelve en porcentaje real.
                 acidez: loteSC ? Number(loteSC.kpis.acidez) / 100 : null,
                 peroxidos: loteSC ? Number(loteSC.kpis.peroxidos) : null,
+                litrosRestantes: lote.litros_restantes,
             };
         }));
 

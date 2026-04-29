@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 function getCurrentYear() {
   return new Date().getFullYear();
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getLotePrefix(year = getCurrentYear()) {
   return `LOT-${year}-`;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildCodigoLote(rawCodigoLote, year = getCurrentYear()) {
   const lotePrefix = getLotePrefix(year);
   const normalizedCodigo = String(rawCodigoLote || "").trim();
@@ -30,11 +32,7 @@ export default function LoteCodeInput({
   label = "Código de lote *",
   placeholder = "Ej: 001",
 }) {
-  const [currentYear, setCurrentYear] = useState(() => getCurrentYear());
-
-  useEffect(() => {
-    setCurrentYear(getCurrentYear());
-  }, []);
+  const [currentYear] = useState(() => getCurrentYear());
 
   return (
     <div className="form-control">

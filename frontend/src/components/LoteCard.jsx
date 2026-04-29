@@ -1,22 +1,22 @@
 // Fondo por calidad usando estilos inline para asegurar visibilidad.
 function calidadBgStyle(calidad) {
-  if (!calidad) return { backgroundColor: "var(--fallback-b1,oklch(var(--b1)/1))" };
+  if (!calidad) return { backgroundColor: "var(--fallback-b1,oklch(var(--b1)/1))", color: "inherit" };
   const c = calidad.toLowerCase();
 
   // En etapas iniciales no hay clasificación de calidad final.
   if (c.includes("transito ok") || c.includes("pendiente")) {
-    return { backgroundColor: "var(--fallback-b1,oklch(var(--b1)/1))" };
+    return { backgroundColor: "var(--fallback-b1,oklch(var(--b1)/1))", color: "inherit" };
   }
 
-  if (c.includes("extra virgen")) return { backgroundColor: "#272b00" };
-  if (c.includes("virgen")) return { backgroundColor: "#54582f" };
-  if (c.includes("corriente")) return { backgroundColor: "#86895d" };
-  if (c.includes("oliva")) return { backgroundColor: "#bec092" };
-  if (c.includes("refinado")) return { backgroundColor: "#6b4f00" };
-  if (c.includes("lampante") || c.includes("no apto")) return { backgroundColor: "#7f1d1d" };
+  if (c.includes("extra virgen")) return { backgroundColor: "#272b00", color: "#fefefe" };
+  if (c.includes("virgen")) return { backgroundColor: "#54582f", color: "#fefefe" };
+  if (c.includes("corriente")) return { backgroundColor: "#86895d", color: "#fefefe" };
+  if (c.includes("oliva")) return { backgroundColor: "#bec092", color: "#111827" };
+  if (c.includes("refinado")) return { backgroundColor: "#6b4f00", color: "#fefefe" };
+  if (c.includes("lampante") || c.includes("no apto")) return { backgroundColor: "#7f1d1d", color: "#fefefe" };
 
   // Fallback neutro para cualquier observación no catalogada.
-  return { backgroundColor: "var(--fallback-b1,oklch(var(--b1)/1))" };
+  return { backgroundColor: "var(--fallback-b1,oklch(var(--b1)/1))", color: "inherit" };
 }
 
 function formatoCalidad(calidad) {
@@ -57,7 +57,7 @@ export default function LoteCard({ lote, stageName, onClick, onDragStart }) {
           <span className="badge badge-outline">{stageName}</span>
         </div>
 
-        <div className="text-sm text-base-content/70 space-y-1 mt-1">
+        <div className="text-sm opacity-80 space-y-1 mt-1">
           <div>
             <span className="font-medium">Variedad:</span> {lote.variedad}
           </div>
@@ -74,12 +74,12 @@ export default function LoteCard({ lote, stageName, onClick, onDragStart }) {
           </div>
         </div>
 
-        <div className="mt-2 text-xs text-base-content/60">
+        <div className="mt-2 text-xs opacity-70">
           Estado: {lote.estado}
         </div>
 
         {debeMostrarCalidad && (
-          <div className="mt-1 text-xs font-medium text-base-content/80">
+          <div className="mt-1 text-xs font-medium opacity-90">
             Resultado blockchain: {calidadTexto}
           </div>
         )}

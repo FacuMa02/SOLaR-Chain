@@ -26,6 +26,12 @@ contract Almazara {
     ProductionDSL.LimitesKPI public limitesActuales;
     address public owner;
 
+    // --- DEPOSITOS ---
+    struct Deposito {
+        uint256 stockActual;
+    }
+    mapping(uint256 => Deposito) public depositos;
+
     // --- EVENTOS ---
 
     event LoteCreado(
@@ -50,6 +56,7 @@ contract Almazara {
     );
     event LimitesActualizados(uint256 timestamp);
     event LoteCancelado(uint256 indexed idSC, string motivo, uint256 timestamp);
+    event EntradaAceite(uint256 depositoId, uint256 litros);
 
     // --- ERRORES ---
     error TransicionInvalida(
@@ -226,6 +233,11 @@ contract Almazara {
             _motivo,
             block.timestamp
         );
+    }
+
+    function registrarEntradaAceite(uint256 depositoId, uint256 litros) external onlyOwner {
+        depositos[depositoId].stockActual += litros;
+        emit EntradaAceite(depositoId, litros);
     }
 
     function getLote(uint256 _id) public view returns (Lote memory) {

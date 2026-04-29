@@ -48,7 +48,7 @@ function LogoutWrapper({ authed, setAuthed, initialized, setInitialized, toast, 
 
   return (
     <Routes>
-      {/* First-Run Experience */}
+      {/* Experiencia de primera ejecución */}
       <Route
         path="/setup"
         element={
@@ -66,7 +66,7 @@ function LogoutWrapper({ authed, setAuthed, initialized, setInitialized, toast, 
         }
       />
 
-      {/* Auth routes */}
+      {/* Rutas de autenticación */}
       <Route
         path="/login"
         element={
@@ -88,7 +88,7 @@ function LogoutWrapper({ authed, setAuthed, initialized, setInitialized, toast, 
       {/* RUTA PÚBLICA: Para cuando olvidaste la contraseña y estás deslogueado */}
       <Route path="/recover" element={authed ? <Navigate to="/" replace /> : <Recover toast={toast} />} />
 
-      {/* Protected app */}
+      {/* Aplicación protegida */}
       <Route
         element={authed ? <ProtectedLayout onLogout={doLogout} /> : <Navigate to="/login" replace />}
       >
@@ -109,7 +109,7 @@ function LogoutWrapper({ authed, setAuthed, initialized, setInitialized, toast, 
         <Route path="/cambiar-contrasena" element={<Recover toast={toast} />} />
       </Route>
 
-      {/* Fallback */}
+      {/* Respaldo */}
       <Route path="*" element={<Navigate to={!initialized ? "/setup" : authed ? "/" : "/login"} replace />} />
     </Routes>
 
@@ -144,7 +144,7 @@ export default function App() {
         if (!cancelled) {
           setInitialized(response.initialized === true);
         }
-      } catch (error) {
+      } catch {
         // Si hay error de conexión, asumir que no está inicializado
         if (!cancelled) {
           setInitialized(false);
@@ -163,7 +163,7 @@ export default function App() {
     };
   }, []);
 
-  // Auth (session local) --------
+  // Autenticación (sesión local) --------
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("solar_authed") === "1");
 
   useEffect(() => {
@@ -188,7 +188,7 @@ export default function App() {
     };
   }, [authed]);
 
-  // -------- Lotes (LocalStorage) ------
+  // -------- Lotes (Almacenamiento Local) ------
   // seguiremos guardando datos locales para otras pantallas (Inicio, etc.)
   const [lotes, _setLotes] = useState(() => lotesSvc.getLotes());
 
@@ -204,7 +204,7 @@ export default function App() {
     await remitosSvc.createRemito(payload);
   }
 
-  // Mostrar loading mientras se verifica la inicialización
+  // Mostrar carga mientras se verifica la inicialización
   if (checkingInit) {
     return (
       <div className="min-h-screen bg-base-200 flex items-center justify-center">

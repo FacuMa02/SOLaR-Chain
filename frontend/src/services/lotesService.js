@@ -121,17 +121,24 @@ export async function fetchTablero() {
   // cada lote viene con: blockchain_id, codigo_lote, variedad, peso_kg, etapa_actual, estado
   // nosotros necesitamos: id, codigo, variedad, kg, stageIndex, estado
   return response.data.map((l) => {
-    // backend may send etapa_index (numeric) or only etapa_actual string
-    let stageIndex = 0;
-    if (typeof l.etapa_index === "number") {
-      stageIndex = l.etapa_index;
-    } else {
-      const idx = STAGES.findIndex((s) => s === l.etapa_actual);
+    // backend may send etapa_index as number or numeric string, otherwise fallback to etapa_actual
+    let stageIndex = Number(l.etapa_index);
+    if (Number.isNaN(stageIndex)) {
+      const etapaActual = String(l.etapa_actual || "").toLowerCase();
+      const normalize = (text) =>
+        String(text)
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim();
+
+      const etapaNormalizada = normalize(etapaActual);
+      const idx = STAGES.findIndex((s) => normalize(s) === etapaNormalizada);
       stageIndex = idx === -1 ? 0 : idx;
     }
 
     return {
-      id: l.codigo_lote,
+      id: l.id_lote,
       codigo: l.codigo_lote,
       fechaInicio: l.fecha_inicio,
       variedad: l.variedad,
@@ -145,6 +152,7 @@ export async function fetchTablero() {
       stageIndex,
       estado: l.estado,
       blockchainId: l.blockchain_id,
+      litrosRestantes: l.litrosRestantes ?? l.litros_restantes ?? 0,
     };
   });
 }
@@ -156,7 +164,7 @@ export async function fetchTablero() {
  */
 export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPayload, maybePayload) {
   // Soporte: advanceStage(blockchainId, etapa, { kgAceiteNeto, acidez, peroxidos })
-  // o advanceStage(codigoLote, etapa) (legacy) — prefer blockchainId usage.
+  // o advanceStage(codigoLote, etapa) (legado) — preferir el uso de blockchainId.
   let payload = {};
   if (maybePayload) {
     // called as (blockchainId, etapa, payload)
@@ -169,7 +177,7 @@ export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPaylo
       peroxidos: maybePayload.peroxidos || 0,
     };
   } else if (typeof toStageIndexOrPayload === "object") {
-    // called as (codigoLote, payload)
+    // llamado como (codigoLote, payload)
     payload = {
       codigoLote: codigoLoteOrBlockchainId,
       etapa: toStageIndexOrPayload.etapa,
@@ -178,7 +186,7 @@ export async function advanceStage(codigoLoteOrBlockchainId, toStageIndexOrPaylo
       peroxidos: toStageIndexOrPayload.peroxidos || 0,
     };
   } else {
-    // called as (codigoLote, etapa)
+    // llamado como (codigoLote, etapa)
     payload = { codigoLote: codigoLoteOrBlockchainId, etapa: toStageIndexOrPayload };
   }
 

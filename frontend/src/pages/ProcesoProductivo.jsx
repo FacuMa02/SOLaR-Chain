@@ -16,10 +16,16 @@ export default function ProcesoProductivo({ toast }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
+  const [cantidadDescontar, setCantidadDescontar] = useState("");
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001";
+
   const byStage = useMemo(() => {
     const map = new Map();
     STAGES.forEach((_, i) => map.set(i, []));
-    for (const l of lotes) map.get(l.stageIndex)?.push(l);
+    for (const l of lotes) {
+      if (l.stageIndex === 6 && typeof l.litrosRestantes === "number" && l.litrosRestantes <= 0) continue;
+      map.get(l.stageIndex)?.push(l);
+    }
 
     for (const [k, arr] of map) {
       arr.sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
@@ -34,8 +40,13 @@ export default function ProcesoProductivo({ toast }) {
       e.preventDefault();
       return;
     }
-    setDrag({ loteId: lote.id, fromIndex: lote.stageIndex });
-    e.dataTransfer.setData("text/plain", lote.id);
+    setDrag({
+      loteId: String(lote.id),
+      fromIndex: lote.stageIndex,
+      blockchainId: lote.blockchainId,
+      codigoLote: lote.codigo,
+    });
+    e.dataTransfer.setData("text/plain", String(lote.id));
     e.dataTransfer.effectAllowed = "move";
   }
 
@@ -57,7 +68,7 @@ export default function ProcesoProductivo({ toast }) {
     }
 
     const fromIndex = drag.fromIndex;
-    const lote = lotes.find((item) => item.id === loteId);
+    const lote = lotes.find((item) => String(item.id) === loteId);
 
     // Si se suelta en la misma sección, ignorar silenciosamente para evitar
     // peticiones de validación innecesarias en el backend.
@@ -67,7 +78,7 @@ export default function ProcesoProductivo({ toast }) {
     }
 
     if (toIndex !== fromIndex + 1) {
-      const blockchainId = lote?.blockchainId || lote?.idBlockchain || null;
+      const blockchainId = drag?.blockchainId || lote?.blockchainId || lote?.idBlockchain || null;
       const motivo = `Intento inválido: ${STAGES[fromIndex]} -> ${STAGES[toIndex]}. Solo se permite avanzar a la etapa siguiente.`;
 
       if (blockchainId) {
@@ -83,7 +94,13 @@ export default function ProcesoProductivo({ toast }) {
       return;
     }
 
-    setConfirm({ loteId, fromIndex, toIndex });
+    setConfirm({
+      loteId,
+      fromIndex,
+      toIndex,
+      blockchainId: drag.blockchainId,
+      codigoLote: drag.codigoLote,
+    });
     setDrag(null);
   }
 
@@ -96,23 +113,22 @@ export default function ProcesoProductivo({ toast }) {
     if (!confirm) return;
     const { loteId, toIndex } = confirm;
 
-    // Optimistic UI
+    // Interfaz de usuario optimista
     const prev = lotes;
-    const next = lotes.map((l) => (l.id === loteId ? { ...l, stageIndex: toIndex } : l));
+    const next = lotes.map((l) => (String(l.id) === String(loteId) ? { ...l, stageIndex: toIndex } : l));
     setLotes(next);
 
     setConfirmLoading(true);
     try {
-      // Buscar el lote local para obtener el blockchainId
-      const lote = lotes.find((l) => l.id === loteId);
-      const blockchainId = lote?.blockchainId || lote?.idBlockchain || null;
+      const blockchainId = confirm.blockchainId;
+      const codigoLote = confirm.codigoLote;
 
-      if (!blockchainId) {
+      if (!blockchainId || !codigoLote) {
         throw new Error("No se encontró el identificador en blockchain para este lote.");
       }
 
       await lotesSvc.advanceStage(blockchainId, toIndex, {
-        codigoLote: lote.codigo,
+        codigoLote,
         kgAceiteNeto: formData.kgAceiteNeto,
         acidez: formData.acidez,
         peroxidos: formData.peroxidos,
@@ -124,7 +140,7 @@ export default function ProcesoProductivo({ toast }) {
         const refreshed = await lotesSvc.fetchTablero();
         setLotes(refreshed);
       } catch (refreshErr) {
-        // Si falla el refresco, no interrumpimos la UX — ya hicimos el cambio optimista.
+        // Si falla el refresco, no interrumpimos la experiencia de usuario — ya hicimos el cambio optimista.
         console.warn("No se pudo refrescar el tablero:", refreshErr);
       }
 
@@ -143,17 +159,52 @@ export default function ProcesoProductivo({ toast }) {
     setConfirm(null);
   }
 
+  async function handleDescontar(cantidad) {
+    if (!selected) return;
+    const amount = Number(cantidad);
+    if (!cantidad || Number.isNaN(amount) || amount <= 0) {
+      toast.error("Ingrese una cantidad válida de litros.");
+      return;
+    }
+
+    try {
+      const url = `${API_BASE}/api/produccion/descontar`;
+      const res = await fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lote_id: selected.id, deposito_id: 1, cantidad: amount }),
+      });
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text || "Respuesta inválida del servidor");
+      }
+
+      if (!data.success) throw new Error(data.error || data.message || "Error al descontar litros");
+
+      toast.success("Litros descontados");
+      setCantidadDescontar("");
+      // recargar lotes y actualizar detalle
+      const refreshed = await lotesSvc.fetchTablero();
+      setLotes(refreshed);
+      const updated = refreshed.find((l) => l.id === selected.id);
+      if (updated) setSelected(updated);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
   // cargar datos iniciales al montar
   useEffect(() => {
     setLoading(true);
-    lotesSvc
-      .fetchTablero()
-      .then((data) => setLotes(data))
-      .catch((err) => {
-        toast.error(err.message || "Error cargando tablero");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    lotesSvc.fetchTablero().then(setLotes).catch((err) => {
+      toast.error(err.message || "Error cargando datos");
+    }).finally(() => setLoading(false));
+  }, [toast]);
 
   return (
     
@@ -261,6 +312,11 @@ export default function ProcesoProductivo({ toast }) {
                     <span className="font-medium">Rendimiento industrial (RI):</span> {selected.rendimiento}%
                   </div>
                 )}
+                {selected.kg !== undefined && selected.rendimiento !== null && selected.rendimiento !== undefined && (
+                  <div>
+                    <span className="font-medium">Litros estimados:</span> {((selected.kg * (selected.rendimiento / 100)) / 0.916).toFixed(2)} L
+                  </div>
+                )}
                 {selected.acidez !== null && selected.acidez !== undefined && (
                   <div>
                     <span className="font-medium">Acidez:</span> {selected.acidez}%
@@ -281,6 +337,19 @@ export default function ProcesoProductivo({ toast }) {
             <button className="btn btn-outline w-full" disabled title="(Opcional) editar en el futuro">
               Editar
             </button>
+
+            {selected.stageIndex === 6 && (
+              <div className="rounded-2xl border p-4 space-y-2">
+                <div className="font-semibold">Descontar Litros</div>
+                <div className="text-sm space-y-1">
+                  <div>
+                    Litros restantes: {((selected.litrosRestantes !== null && selected.litrosRestantes !== undefined ? selected.litrosRestantes : ((selected.kg * (selected.rendimiento / 100)) / 0.916)) || 0).toFixed(2)} L
+                  </div>
+                  <input type="number" placeholder="Cantidad" value={cantidadDescontar} onChange={(e) => setCantidadDescontar(e.target.value)} className="input input-bordered w-full" />
+                  <button className="btn btn-primary w-full" onClick={() => handleDescontar(cantidadDescontar)} disabled={!cantidadDescontar}>Descontar</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </SideDrawer>

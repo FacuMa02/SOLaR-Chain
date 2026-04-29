@@ -128,7 +128,7 @@ export default function FirstRunExperience({ toast, onInitialized }) {
         <div className="divider">Credenciales de Administrador</div>
 
         <form onSubmit={submit} className="space-y-4">
-          {/* Master Key */}
+          {/* Clave Maestra */}
           <div className="form-control">
             <label className="label">
               <span className="label-text font-semibold">Clave Maestra</span>
@@ -163,7 +163,7 @@ export default function FirstRunExperience({ toast, onInitialized }) {
             </label>
           </div>
 
-          {/* Admin Password */}
+          {/* Contraseña de Administrador */}
           <div className="form-control">
             <label className="label">
               <span className="label-text font-semibold">Contraseña de Administrador</span>
@@ -193,7 +193,7 @@ export default function FirstRunExperience({ toast, onInitialized }) {
             </div>
           </div>
 
-          {/* Confirm Password */}
+          {/* Confirmar Contraseña */}
           <div className="form-control">
             <label className="label">
               <span className="label-text font-semibold">Confirmar Contraseña</span>

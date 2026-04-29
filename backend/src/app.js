@@ -10,6 +10,7 @@ import loteRoutes from "./routes/lote.js";
 import remitoRoutes from "./routes/remito.js";
 import analiticasRoutes from "./routes/analiticas.js";
 import tolvaRoutes from "./routes/tolva.js";
+import produccionRoutes from "./routes/produccion.js";
 import requireAuth from "./middleware/requireAuth.js";
 
 dotenv.config();
@@ -38,6 +39,7 @@ async function startServer() {
         app.use('/api/remitos', requireAuth, remitoRoutes);
         app.use('/api/tolva', requireAuth, tolvaRoutes);
         app.use("/api/analiticas", requireAuth, analiticasRoutes);
+        app.use('/api/produccion', requireAuth, produccionRoutes);
 
         // 3. LEVANTAR EL SERVIDOR AL FINAL
         const PORT = process.env.PORT || 3000;

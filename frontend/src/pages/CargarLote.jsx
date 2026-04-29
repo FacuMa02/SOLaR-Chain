@@ -26,7 +26,7 @@ export default function CargarLote({ toast }) {
         if (res.success) {
           setVariedadesDb(res.data);
         }
-      } catch (error) {
+      } catch {
         toast.error("Error al cargar el catálogo de variedades.");
       } finally {
         setLoadingVariedades(false);

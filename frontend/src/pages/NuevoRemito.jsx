@@ -45,7 +45,7 @@ export default function NuevoRemito({ onCreate, toast }) {
         if (res.success) {
           setVariedadesDb(res.data);
         }
-      } catch (error) {
+      } catch {
         toast.error("Error al cargar el catálogo de variedades.");
       } finally {
         setLoadingVariedades(false);
@@ -60,7 +60,7 @@ export default function NuevoRemito({ onCreate, toast }) {
         const data = await getRemitosCatalogos();
         setProductoresDb(data.productores || []);
         setOrigenesDb(data.origenes || []);
-      } catch (error) {
+      } catch {
         toast.error("Error al cargar sugerencias de productor y origen.");
       }
     }

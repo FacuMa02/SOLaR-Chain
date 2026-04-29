@@ -254,7 +254,7 @@ export async function initDB() {
         );
         INSERT OR IGNORE INTO etapas (id, nombre) VALUES
         (0, 'RECEPCION'), (1, 'MOLIENDA'), (2, 'BATIDO'), (3, 'CENTRIFUGADO'),
-        (4, 'DECANTACION'), (5, 'ANALISIS'), (6, 'ALMACENAMIENTO');
+        (4, 'DECANTACION'), (5, 'ANALISIS'), (6, 'ALMACENAMIENTO'), (7, 'FINALIZADO');
     `);
 
     await db.exec(`
@@ -322,6 +322,16 @@ export async function initDB() {
         console.log("Migracion aplicada: lotes.calidad");
     }
 
+    if (!lotesColNames.has("litros_restantes")) {
+        await db.exec("ALTER TABLE lotes ADD COLUMN litros_restantes REAL DEFAULT 0");
+        console.log("Migracion aplicada: lotes.litros_restantes");
+    }
+
+    if (!lotesColNames.has("rendimiento_industrial")) {
+        await db.exec("ALTER TABLE lotes ADD COLUMN rendimiento_industrial REAL DEFAULT 0");
+        console.log("Migracion aplicada: lotes.rendimiento_industrial");
+    }
+
     await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lotes_codigo_lote_unique ON lotes(codigo_lote);`);
 
     await db.exec(`
@@ -347,6 +357,14 @@ export async function initDB() {
             [hashInicial]
         );
     }
+
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS depositos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            stock_actual REAL DEFAULT 0
+        );
+    `);
 
     dbInstance = db;
     return dbInstance;

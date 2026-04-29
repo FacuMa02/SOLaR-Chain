@@ -8,6 +8,7 @@ export default function ConfirmModal({ open, title, subtitle, fromIndex, toIndex
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setKgAceiteNeto("");
       setAcidez("");
       setPeroxidos("");
