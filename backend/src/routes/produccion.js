@@ -116,12 +116,13 @@ router.post('/descontar', async (req, res) => {
         // Restar de deposito
         await db.run('UPDATE depositos SET stock_actual = stock_actual - ? WHERE id = ?', [cantidadADescontar, deposito_id]);
 
-        const loteCompleto = await db.get("SELECT blockchain_id FROM lotes WHERE id_lote = ?", [lote_id]);
+        const loteCompleto = await db.get("SELECT blockchain_id, codigo_lote FROM lotes WHERE id_lote = ?", [lote_id]);
         if (loteCompleto && loteCompleto.blockchain_id) {
             const chainResult = await descontarLoteOnChain(loteCompleto.blockchain_id, cantidadADescontar, quien_retira);
 
             await registrarEventoHistorial({
                 blockchainId: loteCompleto.blockchain_id,
+                codigoLote: loteCompleto.codigo_lote,
                 idTipoEvento: 5, // DESCUENTO_LITROS
                 idEtapa: 6, // ALMACENAMIENTO
                 idEstadoResultado: 0, // APROBADO

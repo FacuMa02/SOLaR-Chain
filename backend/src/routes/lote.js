@@ -63,16 +63,15 @@ async function obtenerBlockchainIdPorSqlite(db, idSqlite) {
         return { error: `El lote '${lote.codigo_lote}' no está sincronizado con blockchain.` };
     }
 
-    return { blockchainId: lote.blockchain_id };
+    return { blockchainId: lote.blockchain_id, codigoLote: lote.codigo_lote };
 }
 
 /* 
 * Consulta la base de datos de auditoría histórica utilizando JOINs para resolver los textos
  * a partir de las tablas de catálogo.
  */
-async function obtenerHistorialUnificado(historyDb, idLoteBlockchain) {
-    return historyDb.all(
-        `
+async function obtenerHistorialUnificado(historyDb, { blockchainId, codigoLote = null }) {
+    const baseSelect = `
         SELECT 
             e.nombre AS etapa,
             ev.nombre AS resultado,
@@ -84,10 +83,26 @@ async function obtenerHistorialUnificado(historyDb, idLoteBlockchain) {
         INNER JOIN etapas e ON h.id_etapa_relacionada = e.id
         INNER JOIN estados_validacion ev ON h.id_estado_resultado = ev.id
         INNER JOIN tipos_evento te ON h.id_tipo_evento = te.id
+    `;
+
+    if (codigoLote) {
+        const historialConCodigo = await historyDb.all(
+            `${baseSelect}
+            WHERE h.blockchain_id = ? AND h.codigo_lote = ?
+            ORDER BY h.fecha_registro ASC`,
+            [blockchainId, codigoLote]
+        );
+
+        if (historialConCodigo.length > 0) {
+            return historialConCodigo;
+        }
+    }
+
+    return historyDb.all(
+        `${baseSelect}
         WHERE h.blockchain_id = ?
-        ORDER BY h.fecha_registro ASC
-        `,
-        [idLoteBlockchain]
+        ORDER BY h.fecha_registro ASC`,
+        [blockchainId]
     );
 }
 
@@ -253,6 +268,7 @@ router.post("/crear-lote", async (req, res) => {
         try {
             await registrarEventoHistorial({
                 blockchainId: blockchainId,
+                codigoLote,
                 idTipoEvento: 1,
                 idEtapa: 0,
                 idEstadoResultado: 0,
@@ -378,6 +394,7 @@ router.post("/cancelar-lote", async (req, res) => {
 
         await registrarEventoHistorial({
             blockchainId: loteDb.blockchain_id,
+            codigoLote,
             idTipoEvento: 3,
             idEtapa: loteDb.id_etapa,
             idEstadoResultado: 3,
@@ -458,6 +475,7 @@ router.post("/avanzar-etapa", async (req, res) => {
 
         await registrarEventoHistorial({
             blockchainId: idLoteBlockchain,
+            codigoLote,
             idTipoEvento: 2,
             idEtapa: etapa,
             idEstadoResultado: idEstado,
@@ -493,6 +511,7 @@ router.post("/avanzar-etapa", async (req, res) => {
 
             await registrarEventoHistorial({
                 blockchainId: idLoteBlockchain,
+                codigoLote,
                 idTipoEvento: 3,
                 idEtapa: etapa,
                 idEstadoResultado: 2,
@@ -605,7 +624,7 @@ router.get("/historial/:idLoteBlockchain", async (req, res) => {
     const historyDb = getHistoryDB();
 
     try {
-        const historial = await obtenerHistorialUnificado(historyDb, idLoteBlockchain);
+        const historial = await obtenerHistorialUnificado(historyDb, { blockchainId: idLoteBlockchain });
 
         if (historial.length === 0) {
             return res.status(404).json({
@@ -642,7 +661,10 @@ router.get("/historial-sqlite/:idSqlite", async (req, res) => {
             return res.status(404).json({ success: false, message: resolved.error });
         }
 
-        const historial = await obtenerHistorialUnificado(historyDb, resolved.blockchainId);
+        const historial = await obtenerHistorialUnificado(historyDb, {
+            blockchainId: resolved.blockchainId,
+            codigoLote: resolved.codigoLote,
+        });
 
         if (historial.length === 0) {
             return res.status(404).json({
@@ -672,7 +694,7 @@ router.get("/historial/:idLoteBlockchain/export", async (req, res) => {
     const historyDb = getHistoryDB();
 
     try {
-        const historial = await obtenerHistorialUnificado(historyDb, idLoteBlockchain);
+        const historial = await obtenerHistorialUnificado(historyDb, { blockchainId: idLoteBlockchain });
 
         if (historial.length === 0) {
             return res.status(404).json({
@@ -722,7 +744,10 @@ router.get("/historial-sqlite/:idSqlite/export", async (req, res) => {
             return res.status(404).json({ success: false, message: resolved.error });
         }
 
-        const historial = await obtenerHistorialUnificado(historyDb, resolved.blockchainId);
+        const historial = await obtenerHistorialUnificado(historyDb, {
+            blockchainId: resolved.blockchainId,
+            codigoLote: resolved.codigoLote,
+        });
 
         if (historial.length === 0) {
             return res.status(404).json({
@@ -908,7 +933,12 @@ router.get("/lotes", async (req, res) => {
     const lotes = await db.all(query, params);
 
     const lotesConHistorial = await Promise.all(lotes.map(async (lote) => {
-        const historial = await obtenerHistorialUnificado(historyDb, lote._blockchain_id);
+        const historial = lote._blockchain_id
+            ? await obtenerHistorialUnificado(historyDb, {
+                blockchainId: lote._blockchain_id,
+                codigoLote: lote.codigo,
+            })
+            : [];
         const { _blockchain_id, ...publicLote } = lote;
         return { ...publicLote, historial: historial || [] };
     }));
@@ -946,7 +976,10 @@ router.get("/lotes/export", async (req, res) => {
 
         const rows = await Promise.all(lotes.map(async (lote) => {
             const eventos = lote._blockchain_id
-                ? await obtenerHistorialUnificado(historyDb, lote._blockchain_id)
+                ? await obtenerHistorialUnificado(historyDb, {
+                    blockchainId: lote._blockchain_id,
+                    codigoLote: lote.codigo,
+                })
                 : [];
 
             return {

@@ -63,6 +63,7 @@ export async function initHistoryDB() {
         CREATE TABLE IF NOT EXISTS historial_eventos (
             id_evento INTEGER PRIMARY KEY AUTOINCREMENT,
             blockchain_id INTEGER NOT NULL, -- El ID del lote en el Smart Contract
+            codigo_lote TEXT,
             id_tipo_evento INTEGER NOT NULL,
             id_etapa_relacionada INTEGER NOT NULL,
             id_estado_resultado INTEGER NOT NULL,
@@ -83,6 +84,7 @@ export async function initHistoryDB() {
     await ensureColumnExists(db, "historial_eventos", "id_estado_resultado", "INTEGER");
     await ensureColumnExists(db, "historial_eventos", "responsable_id", "INTEGER");
     await ensureColumnExists(db, "historial_eventos", "fecha_registro", "TEXT");
+    await ensureColumnExists(db, "historial_eventos", "codigo_lote", "TEXT");
 
     // // Backfill minimo para filas legadas y para evitar NULLs en consultas normalizadas.
     // await db.exec(`
