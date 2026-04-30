@@ -16,7 +16,7 @@ library ProductionDSL {
     enum ResultadoValidacion {
         APROBADO,
         OBSERVADO,
-        NO_CONFORME,
+        BLOQUEADO,
         CANCELADO
     }
 
@@ -31,8 +31,10 @@ library ProductionDSL {
         uint256 maxAcidezExtra; // ej: 80 (0.8%)
         uint256 maxAcidezVirgen; // ej: 200 (2.0%)
         uint256 maxAcidezCorriente; // ej: 330 (3.3%)
+        uint256 maxAcidezRefinado; // ej: 30 (0.3%)
+        uint256 maxAcidezOliva; // ej: 100 (1.0%)
         uint256 maxPeroxidosVirgen; // <= 20 (Aplica a AOVE y Virgen)
-        uint256 maxPeroxidosCorriente; // <= 15
+        uint256 maxPeroxidosOliva; // <= 15
         uint256 maxPeroxidosRefinado; // <= 5
         uint256 minRendimiento; // ej: 10
     }
@@ -56,28 +58,56 @@ library ProductionDSL {
         KPIs memory kpis,
         LimitesKPI memory limites
     ) internal pure returns (Validacion memory) {
+        // Etapas sin validación de KPIs
         if (
             etapa == Etapa.RECEPCION ||
             etapa == Etapa.MOLIENDA ||
             etapa == Etapa.BATIDO ||
-            etapa == Etapa.DECANTACION
+            etapa == Etapa.CENTRIFUGADO
         ) {
             return
                 Validacion(false, ResultadoValidacion.APROBADO, "Transito OK");
         }
 
-        // LÓGICA ACTUALIZADA: Clasificación por Acidez + Peróxidos
-        if (etapa == Etapa.CENTRIFUGADO) {
-            if (kpis.acidez == 0 && kpis.peroxidos == 0) {
+        // DECANTACION: validar rendimiento estimado (kgAceite / kgAceituna * 100)
+        if (etapa == Etapa.DECANTACION) {
+            if (kpis.rendimiento >= limites.minRendimiento) {
                 return
                     Validacion(
-                        true,
-                        ResultadoValidacion.NO_CONFORME,
-                        "Error: Valores quimicos nulos"
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Rendimiento Estimado Optimo"
                     );
             }
+            return
+                Validacion(
+                    false,
+                    ResultadoValidacion.OBSERVADO,
+                    "Rendimiento Estimado Bajo"
+                );
+        }
 
-            // AOVE: Acidez < 0.8% y Peróxidos <= 20
+        // ANALISIS: sin validación de KPIs
+        if (etapa == Etapa.ANALISIS) {
+            return
+                Validacion(false, ResultadoValidacion.APROBADO, "Transito OK");
+        }
+
+        // ALMACENAMIENTO: clasificación por Acidez + Peróxidos + rendimiento definitivo
+        if (etapa == Etapa.ALMACENAMIENTO) {
+            // Refinado: Acidez < 0.3% y Peróxidos <= 5
+            if (
+                kpis.acidez < limites.maxAcidezRefinado &&
+                kpis.peroxidos <= limites.maxPeroxidosRefinado
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Analisis Quimico: Calidad Refinado"
+                    );
+            }
+            // Extra Virgen: Acidez < 0.8% y Peróxidos <= 20
             if (
                 kpis.acidez < limites.maxAcidezExtra &&
                 kpis.peroxidos <= limites.maxPeroxidosVirgen
@@ -86,7 +116,19 @@ library ProductionDSL {
                     Validacion(
                         false,
                         ResultadoValidacion.APROBADO,
-                        "Calidad Extra Virgen"
+                        "Analisis Quimico: Calidad Extra Virgen"
+                    );
+            }
+            // Oliva: Acidez < 1.0% y Peróxidos <= 15
+            if (
+                kpis.acidez < limites.maxAcidezOliva &&
+                kpis.peroxidos <= limites.maxPeroxidosOliva
+            ) {
+                return
+                    Validacion(
+                        false,
+                        ResultadoValidacion.APROBADO,
+                        "Analisis Quimico: Calidad Oliva"
                     );
             }
             // Virgen: Acidez < 2.0% y Peróxidos <= 20
@@ -97,79 +139,24 @@ library ProductionDSL {
                 return
                     Validacion(
                         false,
-                        ResultadoValidacion.OBSERVADO,
-                        "Calidad Virgen"
-                    );
-            }
-            // Corriente: Acidez < 3.3% y Peróxidos <= 15
-            if (
-                kpis.acidez < limites.maxAcidezCorriente &&
-                kpis.peroxidos <= limites.maxPeroxidosCorriente
-            ) {
-                return
-                    Validacion(
-                        false,
-                        ResultadoValidacion.OBSERVADO,
-                        "Calidad Corriente"
-                    );
-            }
-            // Refinado: Peróxidos <= 5 (Si no cumplió los requisitos de acidez anteriores pero tiene peróxidos bajos)
-            if (kpis.peroxidos <= limites.maxPeroxidosRefinado) {
-                return
-                    Validacion(
-                        false,
-                        ResultadoValidacion.OBSERVADO,
-                        "Calidad Refinado"
-                    );
-            }
-
-            // Si falla todo lo anterior (Acidez alta o peróxidos fuera de rango)
-            return
-                Validacion(
-                    false,
-                    ResultadoValidacion.NO_CONFORME,
-                    "V. Lampante NO APTO PARA CONSUMO"
-                );
-        }
-
-        if (etapa == Etapa.ANALISIS) {
-            if (kpis.rendimiento == 0) {
-                return
-                    Validacion(
-                        true,
-                        ResultadoValidacion.NO_CONFORME,
-                        "Error: Rendimiento cero"
-                    );
-            }
-            if (kpis.rendimiento >= limites.minRendimiento) {
-                return
-                    Validacion(
-                        false,
                         ResultadoValidacion.APROBADO,
-                        "Rendimiento Optimo"
+                        "Analisis Quimico: Calidad Virgen"
                     );
             }
-            return
-                Validacion(
-                    false,
-                    ResultadoValidacion.NO_CONFORME,
-                    "Rendimiento Bajo"
-                );
-        }
 
-        if (etapa == Etapa.ALMACENAMIENTO) {
+            // Lampante: fuera de todos los rangos de calidad
             return
                 Validacion(
                     false,
-                    ResultadoValidacion.APROBADO,
-                    "Pendiente (Stock Disponible)"
+                    ResultadoValidacion.BLOQUEADO,
+                    "Analisis Quimico: Calidad Lampante"
                 );
         }
 
         return
             Validacion(
                 true,
-                ResultadoValidacion.NO_CONFORME,
+                ResultadoValidacion.BLOQUEADO,
                 "Etapa desconocida"
             );
     }

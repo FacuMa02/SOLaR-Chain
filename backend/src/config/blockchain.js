@@ -64,7 +64,7 @@ export const contract = new ethers.Contract(contractAddress, contractArtifact.ab
 export const CONTRACT_ADDRESS = contractAddress;
 
 export const ETAPAS = ["RECEPCION", "MOLIENDA", "BATIDO", "CENTRIFUGADO", "DECANTACION", "ANALISIS", "ALMACENAMIENTO"];
-export const RESULTADOS = ["APROBADO", "OBSERVADO", "NO_CONFORME", "CANCELADO"];
+export const RESULTADOS = ["APROBADO", "OBSERVADO", "BLOQUEADO", "CANCELADO"];
 
 console.log(`Conectado a RPC: ${rpcUrl}`);
 console.log(`Conectado al contrato en: ${CONTRACT_ADDRESS}`);
@@ -118,11 +118,11 @@ export async function createLoteOnChain(hashIntegridad, variedad, pesoKg) {
     };
 }
 
-export async function advanceLoteOnChain(idLoteBlockchain, etapa, rendimiento, acidez, peroxidos) {
+export async function advanceLoteOnChain(idLoteBlockchain, etapa, kgAceiteNeto, acidez, peroxidos) {
     await contract.avanzarEtapa.staticCall(
         idLoteBlockchain,
         etapa,
-        Number(rendimiento) || 0,
+        Number(kgAceiteNeto) || 0,
         Number(acidez) || 0,
         Number(peroxidos) || 0
     );
@@ -130,7 +130,7 @@ export async function advanceLoteOnChain(idLoteBlockchain, etapa, rendimiento, a
     const tx = await contract.avanzarEtapa(
         idLoteBlockchain,
         etapa,
-        Number(rendimiento) || 0,
+        Number(kgAceiteNeto) || 0,
         Number(acidez) || 0,
         Number(peroxidos) || 0,
         { gasLimit: 500000 }
@@ -165,6 +165,18 @@ export async function registerInvalidTransitionOnChain(idLoteBlockchain, etapaSo
         txHash: tx.hash,
         receipt,
         event: parseReceiptEvent(receipt, "TransicionInvalidaRegistrada"),
+    };
+}
+
+export async function descontarLoteOnChain(idLoteBlockchain, litros, quienRetira) {
+    const litrosScaled = Math.round((Number(litros) || 0) * 100);
+    const tx = await contract.descontarAceiteLote(idLoteBlockchain, litrosScaled, quienRetira, { gasLimit: 500000 });
+    const receipt = await tx.wait();
+
+    return {
+        txHash: tx.hash,
+        receipt,
+        event: parseReceiptEvent(receipt, "AceiteDescontado"),
     };
 }
 

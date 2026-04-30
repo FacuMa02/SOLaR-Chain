@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import { getDB } from "../config/database.js";
 import { getHistoryDB } from "../config/history_db.js";
+import { registrarEventoHistorial } from "../utils/historialHelper.js";
 import {
     contract,
     wallet,
@@ -20,34 +21,6 @@ const router = express.Router();
 
 let soporteRegistroInvalidoOnChain = null;
 
-/* * Registra un evento en la bitácora histórica normalizada.
- * Utiliza IDs referenciales para tipo de evento, etapa y resultado.
- */
-async function registrarEventoHistorial({ blockchainId, idTipoEvento, idEtapa, idEstadoResultado, detalles = "", txHash = null, responsableId = null, fecha = new Date().toISOString() }) {
-    const historyDb = getHistoryDB();
-    await historyDb.run(
-        `INSERT INTO historial_eventos (
-            blockchain_id,
-            id_tipo_evento,
-            id_etapa_relacionada,
-            id_estado_resultado,
-            tx_hash,
-            detalles,
-            responsable_id,
-            fecha_registro
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-            blockchainId,
-            idTipoEvento,
-            idEtapa,
-            idEstadoResultado,
-            txHash,
-            detalles,
-            responsableId,
-            fecha,
-        ]
-    );
-}
 
 /* 
 * Verifica estáticamente si el contrato desplegado posee la función de registro de transiciones inválidas.
@@ -116,6 +89,31 @@ async function obtenerHistorialUnificado(historyDb, idLoteBlockchain) {
         `,
         [idLoteBlockchain]
     );
+}
+
+function extraerCalidadBlockchain(observaciones) {
+    if (!observaciones) {
+        return null;
+    }
+
+    const texto = String(observaciones).trim();
+    if (!texto) {
+        return null;
+    }
+
+    if (/^analisis quimico:/i.test(texto)) {
+        return texto;
+    }
+
+    if (/^calidad\s+/i.test(texto)) {
+        return `Analisis Quimico: ${texto}`;
+    }
+
+    if (/lampante|no apto/i.test(texto)) {
+        return `Analisis Quimico: ${texto}`;
+    }
+
+    return null;
 }
 
 /* 
@@ -301,6 +299,13 @@ router.get("/consultar/:codigoLote", async (req, res) => {
                 codigoLote: codigoLote,
                 variedad: loteSC.variedad,
                 pesoKg: Number(loteSC.pesoKg),
+                kgAceiteNeto: Number(loteSC.kgAceiteNeto),
+                kpis: {
+                    rendimiento: Number(loteSC.kpis.rendimiento),
+                    // Revertir la conversión x100 aplicada antes de enviar al contrato
+                    acidez: Number(loteSC.kpis.acidez) / 100,
+                    peroxidos: Number(loteSC.kpis.peroxidos),
+                },
                 etapaActual: ETAPAS[Number(loteSC.etapaActual)],
                 estadoCalidad: RESULTADOS[Number(loteSC.estadoCalidad)],
                 observaciones: loteSC.observaciones,
@@ -391,10 +396,24 @@ router.post("/cancelar-lote", async (req, res) => {
  * Lee los eventos de la transacción para conocer la clasificación final asignada por el DSL.
  */
 router.post("/avanzar-etapa", async (req, res) => {
-    const { idLoteBlockchain, etapa, rendimiento, acidez, peroxidos } = req.body;
+    const { idLoteBlockchain, codigoLote, etapa, kgAceiteNeto, acidez, peroxidos } = req.body;
+
+    // El contrato almacena acidez como entero x100 (ej: 0.5% → 50).
+    // Peroxidos y kgAceiteNeto son enteros reales, no requieren conversión.
+    const acidezOnChain = Math.round(Number(acidez) * 100);
 
     try {
-        const chainResult = await advanceLoteOnChain(idLoteBlockchain, etapa, rendimiento, acidez, peroxidos);
+        const db = getDB();
+
+        // Validar que el kgAceiteNeto no sea mayor al peso del lote
+        if (kgAceiteNeto) {
+            const loteInfo = await db.get(`SELECT peso_kg FROM lotes WHERE blockchain_id = ?`, [idLoteBlockchain]);
+            if (loteInfo && Number(kgAceiteNeto) > loteInfo.peso_kg) {
+                return res.status(400).json({ success: false, error: `La masa neta de aceite (${kgAceiteNeto} kg) no puede ser mayor que el peso total del lote (${loteInfo.peso_kg} kg).` });
+            }
+        }
+
+        const chainResult = await advanceLoteOnChain(idLoteBlockchain, etapa, kgAceiteNeto, acidezOnChain, peroxidos);
 
         let idEstado = 0;
         let motivoStr = "Sin observaciones";
@@ -405,14 +424,37 @@ router.post("/avanzar-etapa", async (req, res) => {
             motivoStr = chainResult.event.args[3] || "Transición OK";
         }
 
-        const db = getDB();
-        await db.run(
-            `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ? WHERE blockchain_id = ?`,
-            [etapa, idEstado, idLoteBlockchain]
-        );
+        // Al llegar a ALMACENAMIENTO (etapa 6) guardar la clasificación de calidad y los litros estimados
+        if (etapa === 6) {
+            const litrosRestantes = kgAceiteNeto ? Number(kgAceiteNeto) / 0.916 : 0;
+            if (codigoLote) {
+                await db.run(
+                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ?, calidad = ?, litros_restantes = ? WHERE blockchain_id = ? AND codigo_lote = ?`,
+                    [etapa, idEstado, motivoStr, litrosRestantes, idLoteBlockchain, codigoLote]
+                );
+            } else {
+                await db.run(
+                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ?, calidad = ?, litros_restantes = ? WHERE blockchain_id = ?`,
+                    [etapa, idEstado, motivoStr, litrosRestantes, idLoteBlockchain]
+                );
+            }
+        } else {
+            if (codigoLote) {
+                await db.run(
+                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ? WHERE blockchain_id = ? AND codigo_lote = ?`,
+                    [etapa, idEstado, idLoteBlockchain, codigoLote]
+                );
+            } else {
+                await db.run(
+                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ? WHERE blockchain_id = ?`,
+                    [etapa, idEstado, idLoteBlockchain]
+                );
+            }
+        }
 
         const fechaHora = new Date().toISOString();
-        const detallesJSON = JSON.stringify({ motivo: motivoStr, rendimiento, acidez, peroxidos });
+        // Guardar acidez en su valor decimal original para legibilidad humana en el historial.
+        const detallesJSON = JSON.stringify({ motivo: motivoStr, kgAceiteNeto, acidez: Number(acidez), peroxidos });
 
         await registrarEventoHistorial({
             blockchainId: idLoteBlockchain,
@@ -726,21 +768,70 @@ router.get("/tablero", async (req, res) => {
     try {
         const lotesActivos = await db.all(
             `SELECT 
+                l.id_lote,
                 l.blockchain_id, 
                 l.codigo_lote, 
+                l.fecha_inicio,
                 v.nombre AS variedad, 
                 l.peso_kg, 
                 e.nombre AS etapa_actual, 
                 ev.nombre AS estado, 
-                l.id_etapa AS etapa_index
+                l.calidad,
+                l.litros_restantes,
+                CASE
+                    WHEN l.id_etapa = 6 AND l.id_estado_validacion = 2 THEN 7
+                    ELSE l.id_etapa
+                END AS etapa_index
              FROM lotes l
              INNER JOIN variedades v ON l.id_variedad = v.id
              INNER JOIN etapas e ON l.id_etapa = e.id
              INNER JOIN estados ev ON l.id_estado_validacion = ev.id
-             WHERE l.id_estado_validacion != 3 AND l.blockchain_id IS NOT NULL`
+                         WHERE l.id_estado_validacion != 3
+                             AND l.blockchain_id IS NOT NULL
+                             AND l.id_lote = (
+                                        SELECT MAX(l2.id_lote)
+                                        FROM lotes l2
+                                        WHERE l2.blockchain_id = l.blockchain_id
+                                            AND l2.id_estado_validacion != 3
+                             )`
         );
 
-        const data = Array.isArray(lotesActivos) ? lotesActivos : [];
+        const dataBase = Array.isArray(lotesActivos) ? lotesActivos : [];
+
+        // Enriquecer con datos on-chain para cubrir lotes existentes previos a la columna "calidad"
+        // y exponer KPIs (rendimiento/acidez/peroxidos) al tablero.
+        const data = await Promise.all(dataBase.map(async (lote) => {
+            let loteSC = null;
+            try {
+                loteSC = await getLoteOnChain(lote.blockchain_id);
+            } catch (chainError) {
+                console.warn(`No se pudo consultar on-chain el lote ${lote.blockchain_id}:`, chainError?.message || chainError);
+            }
+
+            const calidadPersistida = extraerCalidadBlockchain(lote.calidad);
+            const calidadOnChain = extraerCalidadBlockchain(loteSC?.observaciones);
+            const calidadFinal = calidadPersistida || calidadOnChain || null;
+
+            // Backfill para que lotes históricos en almacenamiento/venta tengan color sin reprocesarlos.
+            if (calidadFinal && lote.calidad !== calidadFinal && (lote.etapa_index === 6 || lote.etapa_index === 7)) {
+                await db.run(
+                    `UPDATE lotes SET calidad = ? WHERE blockchain_id = ? AND codigo_lote = ?`,
+                    [calidadFinal, lote.blockchain_id, lote.codigo_lote]
+                );
+            }
+
+            return {
+                id_lote: lote.id_lote,
+                ...lote,
+                calidad: calidadFinal,
+                kg_aceite_neto: loteSC ? Number(loteSC.kgAceiteNeto) : null,
+                rendimiento: loteSC ? Number(loteSC.kpis.rendimiento) : null,
+                // Acidez on-chain está normalizada x100; para UI se devuelve en porcentaje real.
+                acidez: loteSC ? Number(loteSC.kpis.acidez) / 100 : null,
+                peroxidos: loteSC ? Number(loteSC.kpis.peroxidos) : null,
+                litrosRestantes: lote.litros_restantes,
+            };
+        }));
 
         res.json({
             success: true,

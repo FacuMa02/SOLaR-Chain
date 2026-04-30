@@ -6,16 +6,16 @@ const router = express.Router();
 
 function parseMetricas(detalles) {
     if (!detalles) {
-        return { rendimiento: 0 };
+        return { kgAceiteNeto: 0 };
     }
 
     try {
         const parsed = JSON.parse(detalles);
         return {
-            rendimiento: Number(parsed?.rendimiento || 0),
+            kgAceiteNeto: Number(parsed?.kgAceiteNeto || 0),
         };
     } catch {
-        return { rendimiento: 0 };
+        return { kgAceiteNeto: 0 };
     }
 }
 
@@ -54,18 +54,26 @@ router.get("/", async (req, res) => {
             SELECT blockchain_id, detalles, fecha_registro
             FROM historial_eventos
             WHERE id_tipo_evento = 2
+            ORDER BY fecha_registro ASC
         `);
 
-        const transiciones = eventosTransicion
-            .map((evento) => {
-                const metricas = parseMetricas(evento.detalles);
-                return {
-                    blockchain_id: evento.blockchain_id,
-                    rendimiento: metricas.rendimiento,
+        // Extraer la MÁS RECIENTE métrica de extracción por lote
+        const latestMetricasPorLote = {};
+        eventosTransicion.forEach((evento) => {
+            const metricas = parseMetricas(evento.detalles);
+            if (metricas.kgAceiteNeto > 0) {
+                latestMetricasPorLote[evento.blockchain_id] = {
+                    kgAceiteNeto: metricas.kgAceiteNeto,
                     fecha_hora: evento.fecha_registro,
                 };
-            })
-            .filter((transicion) => transicion.rendimiento > 0);
+            }
+        });
+
+        const transiciones = Object.entries(latestMetricasPorLote).map(([b_id, data]) => ({
+            blockchain_id: Number(b_id),
+            kgAceiteNeto: data.kgAceiteNeto,
+            fecha_hora: data.fecha_hora,
+        }));
 
         // 2. MATEMÁTICA PARA LOS KPIs (Tarjetas de resumen)
         const totalOliva = remitos.reduce((acc, r) => acc + r.kg, 0);
@@ -76,14 +84,27 @@ router.get("/", async (req, res) => {
 
         let totalAceite = 0;
         let sumaRendimiento = 0;
+        let transicionesValidas = 0;
 
         transiciones.forEach(t => {
             const kgLote = pesoPorLote[t.blockchain_id] || 0;
-            totalAceite += kgLote * (t.rendimiento / 100); // Kilos * Porcentaje
-            sumaRendimiento += t.rendimiento;
+            // Densidad promedio del aceite de oliva = 0.916 kg/L
+            const litrosAceite = t.kgAceiteNeto / 0.916;
+            
+            t.litrosAceite = litrosAceite;
+            totalAceite += litrosAceite;
+
+            if (kgLote > 0) {
+                const rendimiento = (t.kgAceiteNeto / kgLote) * 100;
+                t.rendimiento = rendimiento;
+                sumaRendimiento += rendimiento;
+                transicionesValidas++;
+            } else {
+                t.rendimiento = 0;
+            }
         });
 
-        const rendimientoPromedio = transiciones.length > 0 ? (sumaRendimiento / transiciones.length) : 0;
+        const rendimientoPromedio = transicionesValidas > 0 ? (sumaRendimiento / transicionesValidas) : 0;
 
         // 3. AGRUPAR DATOS POR SEMANA PARA LOS GRÁFICOS
         const datosSemanales = {};
@@ -100,10 +121,11 @@ router.get("/", async (req, res) => {
             const sem = getWeekLabel(t.fecha_hora);
             if (!datosSemanales[sem]) datosSemanales[sem] = { semana: sem, oliva: 0, aceite: 0, sumRen: 0, countRen: 0 };
 
-            const kgLote = pesoPorLote[t.blockchain_id] || 0;
-            datosSemanales[sem].aceite += kgLote * (t.rendimiento / 100);
-            datosSemanales[sem].sumRen += t.rendimiento;
-            datosSemanales[sem].countRen += 1;
+            datosSemanales[sem].aceite += t.litrosAceite;
+            if (t.rendimiento > 0) {
+                datosSemanales[sem].sumRen += t.rendimiento;
+                datosSemanales[sem].countRen += 1;
+            }
         });
 
         // Convertir el objeto agrupado en los arrays exactos que necesita Recharts

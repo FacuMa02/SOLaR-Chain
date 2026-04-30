@@ -52,7 +52,7 @@ export async function initHistoryDB() {
             nombre TEXT NOT NULL UNIQUE
         );
         INSERT OR IGNORE INTO tipos_evento (id, nombre) VALUES 
-        (1, 'CREACION_LOTE'), (2, 'TRANSICION_ETAPA'), (3, 'ALERTA_SEGURIDAD'), (4, 'OVERRIDE_CALIDAD');
+        (1, 'CREACION_LOTE'), (2, 'TRANSICION_ETAPA'), (3, 'ALERTA_SEGURIDAD'), (4, 'OVERRIDE_CALIDAD'), (5, 'DESCUENTO_LITROS');
     `);
 
     // ==========================================
