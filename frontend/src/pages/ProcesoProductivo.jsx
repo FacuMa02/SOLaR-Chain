@@ -312,10 +312,16 @@ export default function ProcesoProductivo({ toast }) {
                     <span className="font-medium">Rendimiento industrial (RI):</span> {selected.rendimiento}%
                   </div>
                 )}
-                {selected.kg !== undefined && selected.rendimiento !== null && selected.rendimiento !== undefined && (
+                {selected.kgAceiteNeto ? (
                   <div>
-                    <span className="font-medium">Litros estimados:</span> {((selected.kg * (selected.rendimiento / 100)) / 0.916).toFixed(2)} L
+                    <span className="font-medium">Litros estimados:</span> {(selected.kgAceiteNeto / 0.916).toFixed(2)} L
                   </div>
+                ) : (
+                  selected.kg !== undefined && selected.rendimiento !== null && selected.rendimiento !== undefined && (
+                    <div>
+                      <span className="font-medium">Litros estimados:</span> {((selected.kg * (selected.rendimiento / 100)) / 0.916).toFixed(2)} L
+                    </div>
+                  )
                 )}
                 {selected.acidez !== null && selected.acidez !== undefined && (
                   <div>
@@ -343,7 +349,7 @@ export default function ProcesoProductivo({ toast }) {
                 <div className="font-semibold">Descontar Litros</div>
                 <div className="text-sm space-y-1">
                   <div>
-                    Litros restantes: {((selected.litrosRestantes !== null && selected.litrosRestantes !== undefined ? selected.litrosRestantes : ((selected.kg * (selected.rendimiento / 100)) / 0.916)) || 0).toFixed(2)} L
+                    Litros restantes: {((selected.litrosRestantes !== null && selected.litrosRestantes !== undefined ? selected.litrosRestantes : (selected.kgAceiteNeto ? selected.kgAceiteNeto / 0.916 : ((selected.kg * (selected.rendimiento / 100)) / 0.916))) || 0).toFixed(2)} L
                   </div>
                   <input type="number" placeholder="Cantidad" value={cantidadDescontar} onChange={(e) => setCantidadDescontar(e.target.value)} className="input input-bordered w-full" />
                   <button className="btn btn-primary w-full" onClick={() => handleDescontar(cantidadDescontar)} disabled={!cantidadDescontar}>Descontar</button>

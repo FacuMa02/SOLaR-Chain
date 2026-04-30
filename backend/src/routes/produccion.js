@@ -107,7 +107,7 @@ router.post('/descontar', async (req, res) => {
         }
 
         let nuevosLitros = lote.litros_restantes - cantidadADescontar;
-        if (nuevosLitros < 0.001) nuevosLitros = 0; // Evitar polvo flotante
+        if (nuevosLitros < 0.05) nuevosLitros = 0; // Evitar polvo flotante por redondeo de UI a 2 decimales
 
         // Restar de lote
         await db.run('UPDATE lotes SET litros_restantes = ? WHERE id_lote = ?', [nuevosLitros, lote_id]);

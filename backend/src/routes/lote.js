@@ -442,17 +442,18 @@ router.post("/avanzar-etapa", async (req, res) => {
         }
 
         const db = getDB();
-        // Al llegar a ALMACENAMIENTO (etapa 6) guardar la clasificación de calidad
+        // Al llegar a ALMACENAMIENTO (etapa 6) guardar la clasificación de calidad y los litros estimados
         if (etapa === 6) {
+            const litrosRestantes = kgAceiteNeto ? Number(kgAceiteNeto) / 0.916 : 0;
             if (codigoLote) {
                 await db.run(
-                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ?, calidad = ? WHERE blockchain_id = ? AND codigo_lote = ?`,
-                    [etapa, idEstado, motivoStr, idLoteBlockchain, codigoLote]
+                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ?, calidad = ?, litros_restantes = ? WHERE blockchain_id = ? AND codigo_lote = ?`,
+                    [etapa, idEstado, motivoStr, litrosRestantes, idLoteBlockchain, codigoLote]
                 );
             } else {
                 await db.run(
-                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ?, calidad = ? WHERE blockchain_id = ?`,
-                    [etapa, idEstado, motivoStr, idLoteBlockchain]
+                    `UPDATE lotes SET id_etapa = ?, id_estado_validacion = ?, calidad = ?, litros_restantes = ? WHERE blockchain_id = ?`,
+                    [etapa, idEstado, motivoStr, litrosRestantes, idLoteBlockchain]
                 );
             }
         } else {

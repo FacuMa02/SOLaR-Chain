@@ -152,7 +152,7 @@ export async function fetchTablero() {
       stageIndex,
       estado: l.estado,
       blockchainId: l.blockchain_id,
-      litrosRestantes: l.litrosRestantes ?? l.litros_restantes ?? 0,
+      litrosRestantes: l.litrosRestantes ?? l.litros_restantes ?? null,
     };
   });
 }
