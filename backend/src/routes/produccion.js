@@ -1,6 +1,7 @@
 import express from "express";
 import { getDB } from "../config/database.js";
-import { contract } from "../config/blockchain.js";
+import { contract, descontarLoteOnChain } from "../config/blockchain.js";
+import { registrarEventoHistorial } from "../utils/historialHelper.js";
 
 const router = express.Router();
 
@@ -82,10 +83,10 @@ router.post('/finalizar-lote', async (req, res) => {
 });
 
 router.post('/descontar', async (req, res) => {
-    const { lote_id, deposito_id, cantidad } = req.body;
+    const { lote_id, deposito_id, cantidad, quien_retira } = req.body;
 
-    if (!lote_id || !deposito_id || !cantidad || cantidad <= 0) {
-        return res.status(400).json({ error: 'Parámetros inválidos' });
+    if (!lote_id || !deposito_id || !cantidad || cantidad <= 0 || !quien_retira) {
+        return res.status(400).json({ error: 'Parámetros inválidos. Se requiere cantidad y quien retira.' });
     }
 
     try {
@@ -114,6 +115,25 @@ router.post('/descontar', async (req, res) => {
 
         // Restar de deposito
         await db.run('UPDATE depositos SET stock_actual = stock_actual - ? WHERE id = ?', [cantidadADescontar, deposito_id]);
+
+        const loteCompleto = await db.get("SELECT blockchain_id FROM lotes WHERE id_lote = ?", [lote_id]);
+        if (loteCompleto && loteCompleto.blockchain_id) {
+            const chainResult = await descontarLoteOnChain(loteCompleto.blockchain_id, cantidadADescontar, quien_retira);
+
+            await registrarEventoHistorial({
+                blockchainId: loteCompleto.blockchain_id,
+                idTipoEvento: 5, // DESCUENTO_LITROS
+                idEtapa: 6, // ALMACENAMIENTO
+                idEstadoResultado: 0, // APROBADO
+                detalles: JSON.stringify({
+                    motivo: `Descuento de ${cantidadADescontar.toFixed(2)} L. Retira: ${quien_retira}`,
+                    litrosDescontados: cantidadADescontar,
+                    litrosRestantes: nuevosLitros,
+                    quienRetira: quien_retira
+                }),
+                txHash: chainResult.txHash
+            });
+        }
 
         res.json({ success: true });
 

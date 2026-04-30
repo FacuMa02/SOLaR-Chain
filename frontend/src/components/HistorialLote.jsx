@@ -61,6 +61,7 @@ function parseMotivo(motivo) {
         kgAceiteNeto: parsed.kgAceiteNeto,
         acidez: parsed.acidez,
         peroxidos: parsed.peroxidos,
+        quienRetira: parsed.quienRetira,
       },
     };
   } catch {
@@ -158,6 +159,7 @@ export default function HistorialLote({ lote, eventos, loading, error, onExport,
                 kgAceiteNeto: motivoFormateado.metricas.kgAceiteNeto,
                 acidez: evento.acidez ?? motivoFormateado.metricas.acidez,
                 peroxidos: evento.peroxidos ?? motivoFormateado.metricas.peroxidos,
+                quienRetira: motivoFormateado.metricas.quienRetira,
               };
 
               return (
@@ -166,16 +168,17 @@ export default function HistorialLote({ lote, eventos, loading, error, onExport,
 
                   <p className="text-xs text-base-content/55">{formatDate(evento.fecha_hora)}</p>
                   <p className="mt-1 text-sm font-semibold">
-                    {evento.etapa} · {evento.resultado}
+                    {evento.tipo_evento === 'DESCUENTO_LITROS' ? 'DESCUENTO DE ACEITE' : evento.etapa} · {evento.resultado}
                   </p>
                   <p className="mt-1 text-sm text-base-content/80">{motivoFormateado.descripcion}</p>
 
-                  {(hasMetric(metricas.rendimiento) || hasMetric(metricas.kgAceiteNeto) || hasMetric(metricas.acidez) || hasMetric(metricas.peroxidos)) && (
+                  {(hasMetric(metricas.rendimiento) || hasMetric(metricas.kgAceiteNeto) || hasMetric(metricas.acidez) || hasMetric(metricas.peroxidos) || metricas.quienRetira) && (
                     <p className="mt-1 text-xs text-base-content/65">
                       {hasMetric(metricas.rendimiento) ? `Rendimiento: ${metricas.rendimiento} ` : ""}
                       {hasMetric(metricas.kgAceiteNeto) ? `Kg aceite neto: ${metricas.kgAceiteNeto} ` : ""}
                       {hasMetric(metricas.acidez) ? `Acidez: ${metricas.acidez} ` : ""}
-                      {hasMetric(metricas.peroxidos) ? `Peróxidos: ${metricas.peroxidos}` : ""}
+                      {hasMetric(metricas.peroxidos) ? `Peróxidos: ${metricas.peroxidos} ` : ""}
+                      {metricas.quienRetira ? `Retira: ${metricas.quienRetira}` : ""}
                     </p>
                   )}
 

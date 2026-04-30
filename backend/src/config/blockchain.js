@@ -168,6 +168,18 @@ export async function registerInvalidTransitionOnChain(idLoteBlockchain, etapaSo
     };
 }
 
+export async function descontarLoteOnChain(idLoteBlockchain, litros, quienRetira) {
+    const litrosScaled = Math.round((Number(litros) || 0) * 100);
+    const tx = await contract.descontarAceiteLote(idLoteBlockchain, litrosScaled, quienRetira, { gasLimit: 500000 });
+    const receipt = await tx.wait();
+
+    return {
+        txHash: tx.hash,
+        receipt,
+        event: parseReceiptEvent(receipt, "AceiteDescontado"),
+    };
+}
+
 export async function getLoteOnChain(idLoteBlockchain) {
     return contract.getLote(idLoteBlockchain);
 }

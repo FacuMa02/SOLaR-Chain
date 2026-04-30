@@ -57,6 +57,7 @@ contract Almazara {
     event LimitesActualizados(uint256 timestamp);
     event LoteCancelado(uint256 indexed idSC, string motivo, uint256 timestamp);
     event EntradaAceite(uint256 depositoId, uint256 litros);
+    event AceiteDescontado(uint256 indexed idSC, uint256 litros, string quienRetira, uint256 timestamp);
 
     // --- ERRORES ---
     error TransicionInvalida(
@@ -238,6 +239,17 @@ contract Almazara {
     function registrarEntradaAceite(uint256 depositoId, uint256 litros) external onlyOwner {
         depositos[depositoId].stockActual += litros;
         emit EntradaAceite(depositoId, litros);
+    }
+
+    function descontarAceiteLote(uint256 _idLote, uint256 litros, string memory quienRetira) public onlyOwner {
+        if (lotes[_idLote].id == 0) revert LoteNoExiste(_idLote);
+        Lote storage lote = lotes[_idLote];
+
+        if (lote.estadoCalidad == ProductionDSL.ResultadoValidacion.CANCELADO) {
+            revert LoteBloqueadoPorCancelacion();
+        }
+
+        emit AceiteDescontado(_idLote, litros, quienRetira, block.timestamp);
     }
 
     function getLote(uint256 _id) public view returns (Lote memory) {

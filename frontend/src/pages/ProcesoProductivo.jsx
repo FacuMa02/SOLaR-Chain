@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { STAGES, VIRTUAL_STAGES } from "../data/stages";
 import LoteCard from "../components/LoteCard";
 import ConfirmModal from "../components/ConfirmModal";
@@ -17,6 +17,9 @@ export default function ProcesoProductivo({ toast }) {
   const [selected, setSelected] = useState(null);
 
   const [cantidadDescontar, setCantidadDescontar] = useState("");
+  const [quienRetira, setQuienRetira] = useState("");
+  const [isSubmittingDescuento, setIsSubmittingDescuento] = useState(false);
+  const submitLock = useRef(false);
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001";
 
   const byStage = useMemo(() => {
@@ -100,6 +103,7 @@ export default function ProcesoProductivo({ toast }) {
       toIndex,
       blockchainId: drag.blockchainId,
       codigoLote: drag.codigoLote,
+      maxKg: lote?.kg,
     });
     setDrag(null);
   }
@@ -159,21 +163,29 @@ export default function ProcesoProductivo({ toast }) {
     setConfirm(null);
   }
 
-  async function handleDescontar(cantidad) {
+  async function handleDescontar(cantidad, quien) {
     if (!selected) return;
+    if (submitLock.current) return;
+    
     const amount = Number(cantidad);
     if (!cantidad || Number.isNaN(amount) || amount <= 0) {
       toast.error("Ingrese una cantidad válida de litros.");
       return;
     }
+    if (!quien || !quien.trim()) {
+      toast.error("Ingrese quién retira el aceite.");
+      return;
+    }
 
+    submitLock.current = true;
+    setIsSubmittingDescuento(true);
     try {
       const url = `${API_BASE}/api/produccion/descontar`;
       const res = await fetch(url, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lote_id: selected.id, deposito_id: 1, cantidad: amount }),
+        body: JSON.stringify({ lote_id: selected.id, deposito_id: 1, cantidad: amount, quien_retira: quien.trim() }),
       });
 
       const text = await res.text();
@@ -188,6 +200,7 @@ export default function ProcesoProductivo({ toast }) {
 
       toast.success("Litros descontados");
       setCantidadDescontar("");
+      setQuienRetira("");
       // recargar lotes y actualizar detalle
       const refreshed = await lotesSvc.fetchTablero();
       setLotes(refreshed);
@@ -195,6 +208,9 @@ export default function ProcesoProductivo({ toast }) {
       if (updated) setSelected(updated);
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      submitLock.current = false;
+      setIsSubmittingDescuento(false);
     }
   }
 
@@ -270,6 +286,7 @@ export default function ProcesoProductivo({ toast }) {
         subtitle="¿Confirmar avance de etapa?"
         fromIndex={confirm?.fromIndex}
         toIndex={confirm?.toIndex}
+        maxKg={confirm?.maxKg}
         onCancel={cancelMove}
         onConfirm={confirmMove}
         loading={confirmLoading}
@@ -352,7 +369,10 @@ export default function ProcesoProductivo({ toast }) {
                     Litros restantes: {((selected.litrosRestantes !== null && selected.litrosRestantes !== undefined ? selected.litrosRestantes : (selected.kgAceiteNeto ? selected.kgAceiteNeto / 0.916 : ((selected.kg * (selected.rendimiento / 100)) / 0.916))) || 0).toFixed(2)} L
                   </div>
                   <input type="number" placeholder="Cantidad" value={cantidadDescontar} onChange={(e) => setCantidadDescontar(e.target.value)} className="input input-bordered w-full" />
-                  <button className="btn btn-primary w-full" onClick={() => handleDescontar(cantidadDescontar)} disabled={!cantidadDescontar}>Descontar</button>
+                  <input type="text" placeholder="¿Quién retira?" value={quienRetira} onChange={(e) => setQuienRetira(e.target.value)} className="input input-bordered w-full" />
+                  <button className="btn btn-primary w-full" onClick={() => handleDescontar(cantidadDescontar, quienRetira)} disabled={!cantidadDescontar || !quienRetira.trim() || isSubmittingDescuento}>
+                    {isSubmittingDescuento ? "Descontando..." : "Descontar"}
+                  </button>
                 </div>
               </div>
             )}

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { STAGES, SIMPLE_TRANSITIONS, KG_ACEITE_TRANSITION, QUALITY_TRANSITION } from "../data/stages";
 
-export default function ConfirmModal({ open, title, subtitle, fromIndex, toIndex, onConfirm, onCancel, loading }) {
+export default function ConfirmModal({ open, title, subtitle, fromIndex, toIndex, maxKg, onConfirm, onCancel, loading }) {
   const [kgAceiteNeto, setKgAceiteNeto] = useState("");
   const [acidez, setAcidez] = useState("");
   const [peroxidos, setPeroxidos] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -12,6 +13,7 @@ export default function ConfirmModal({ open, title, subtitle, fromIndex, toIndex
       setKgAceiteNeto("");
       setAcidez("");
       setPeroxidos("");
+      setErrorMsg("");
     }
   }, [open]);
 
@@ -27,8 +29,16 @@ export default function ConfirmModal({ open, title, subtitle, fromIndex, toIndex
 
   function handleConfirm() {
     if (!onConfirm) return;
+    
+    const kg = Number(kgAceiteNeto) || 0;
+    if ((isKgAceite || isFullQuality) && maxKg && kg > maxKg) {
+      setErrorMsg(`La masa de aceite (${kg} kg) no puede ser mayor que el peso total del lote (${maxKg} kg).`);
+      return;
+    }
+    setErrorMsg("");
+
     onConfirm({
-      kgAceiteNeto: Number(kgAceiteNeto) || 0,
+      kgAceiteNeto: kg,
       acidez: Number(acidez) || 0,
       peroxidos: Number(peroxidos) || 0,
     });
@@ -117,6 +127,8 @@ export default function ConfirmModal({ open, title, subtitle, fromIndex, toIndex
             </div>
           </div>
         )}
+
+        {errorMsg && <p className="text-sm font-semibold text-error">{errorMsg}</p>}
 
         <div className="flex justify-end gap-2">
           <button className="btn btn-ghost" type="button" onClick={onCancel} disabled={loading}>
