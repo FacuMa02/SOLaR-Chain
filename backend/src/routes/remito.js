@@ -4,15 +4,30 @@ import { getDB } from "../config/database.js";
 
 const router = express.Router();
 
+const REMITO_UTC_OFFSET_HOURS = 3;
+
+function formatDateTimeAtUtcOffset(date, offsetHours) {
+    const shifted = new Date(date.getTime() + offsetHours * 60 * 60 * 1000);
+    const yyyy = String(shifted.getUTCFullYear());
+    const month = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(shifted.getUTCDate()).padStart(2, "0");
+    const hh = String(shifted.getUTCHours()).padStart(2, "0");
+    const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
+    const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
+    return `${yyyy}-${month}-${dd}T${hh}:${mm}:${ss}`;
+}
+
+function getNowAtUtcOffset(offsetHours) {
+    return formatDateTimeAtUtcOffset(new Date(), offsetHours);
+}
+
 function normalizeFechaRecepcion(fechaRecepcion) {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    const ss = String(now.getSeconds()).padStart(2, "0");
+    const nowAtUtcOffset = getNowAtUtcOffset(REMITO_UTC_OFFSET_HOURS);
+    const [, hh, mm, ss] = nowAtUtcOffset.match(/T(\d{2}):(\d{2}):(\d{2})$/) || [];
 
     const raw = String(fechaRecepcion || "").trim();
     if (!raw) {
-        return now.toISOString();
+        return nowAtUtcOffset;
     }
 
     const explicitDateMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
@@ -22,7 +37,7 @@ function normalizeFechaRecepcion(fechaRecepcion) {
 
     const parsed = new Date(raw);
     if (Number.isNaN(parsed.getTime())) {
-        return now.toISOString();
+        return nowAtUtcOffset;
     }
 
     const yyyy = String(parsed.getFullYear());
@@ -187,7 +202,7 @@ router.post("/", async (req, res) => {
 
         await db.exec("BEGIN TRANSACTION");
 
-        const createdAt = new Date().toISOString();
+        const createdAt = getNowAtUtcOffset(REMITO_UTC_OFFSET_HOURS);
         const fechaRecepcionNormalized = normalizeFechaRecepcion(fechaRecepcion);
 
         const insertResult = await db.run(

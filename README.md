@@ -17,9 +17,17 @@ cd SOLaR-Chain
 docker-compose up -d
 
 # La aplicación estará disponible en:
-# - Frontend: http://localhost
-# - Backend API: http://localhost:3000/api
+# - Frontend: http://localhost:5173
+# - Backend API: http://localhost:3001/api
+# - Ganache RPC: http://localhost:8545
 ```
+
+Al iniciar con Docker se levantan 4 servicios:
+
+- `ganache`: nodo blockchain local en modo simulación (gas price = 0).
+- `contract-deployer`: despliega automáticamente `Almazara` en Ganache.
+- `backend`: API Express conectada al contrato desplegado.
+- `frontend`: UI React servida por Nginx.
 
 ### Primera ejecución (First-Run Experience)
 
@@ -56,6 +64,12 @@ docker-compose logs -f backend
 
 # Solo frontend
 docker-compose logs -f frontend
+
+# Nodo Ganache
+docker-compose logs -f ganache
+
+# Deploy automático del contrato
+docker-compose logs -f contract-deployer
 ```
 
 ## Estructura del Proyecto

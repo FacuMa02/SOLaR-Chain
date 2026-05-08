@@ -20,7 +20,8 @@ export default function ProcesoProductivo({ toast }) {
   const [quienRetira, setQuienRetira] = useState("");
   const [isSubmittingDescuento, setIsSubmittingDescuento] = useState(false);
   const submitLock = useRef(false);
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001";
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api";
+  const PRODUCCION_ENDPOINT = API_BASE.endsWith("/api") ? `${API_BASE}/produccion` : `${API_BASE}/api/produccion`;
 
   const byStage = useMemo(() => {
     const map = new Map();
@@ -180,7 +181,7 @@ export default function ProcesoProductivo({ toast }) {
     submitLock.current = true;
     setIsSubmittingDescuento(true);
     try {
-      const url = `${API_BASE}/api/produccion/descontar`;
+      const url = `${PRODUCCION_ENDPOINT}/descontar`;
       const res = await fetch(url, {
         method: "POST",
         credentials: "include",

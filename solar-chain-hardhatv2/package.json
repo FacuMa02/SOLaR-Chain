@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy:ganache": "npx hardhat run --network localhost ./scripts/deploy-ganache.cjs"
+    "deploy:ganache": "npx hardhat --config hardhat.config.cjs run --network localhost ./scripts/deploy-ganache.cjs"
   },
   "keywords": [],
   "author": "",

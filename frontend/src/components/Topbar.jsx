@@ -15,6 +15,7 @@ export default function Topbar({ onLogout }) {
   const [isLargeText, setIsLargeText] = useState(() => {
     return localStorage.getItem("solar_text") === "large";
   });
+  const [isClosingApp, setIsClosingApp] = useState(false);
 
   
 // --- EFECTOS PARA APLICAR LOS CAMBIOS ---
@@ -44,9 +45,30 @@ export default function Topbar({ onLogout }) {
     }
   }, [isLargeText]);
 
+  async function handleExitApp() {
+    const confirmed = window.confirm("¿Desea salir de la aplicación?");
+    if (!confirmed) return;
+
+    setIsClosingApp(true);
+
+    try {
+      await fetch("http://127.0.0.1:53921/close", {
+        method: "POST",
+      });
+      return;
+    } catch {
+      // Fallback si el controlador local no estuviera disponible.
+      window.open("", "_self");
+      window.close();
+      alert("No se pudo cerrar automáticamente la ventana. Use el botón X del sistema o el script de cierre.");
+    } finally {
+      setIsClosingApp(false);
+    }
+  }
+
   return (
     <div className="navbar bg-base-100 border-b sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto w-full px-4 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto w-full px-4 pr-14 flex items-center justify-between relative">
         
         {/* LADO IZQUIERDO: Logo */}
         <div className="flex flex-col">
@@ -172,11 +194,35 @@ export default function Topbar({ onLogout }) {
                   </ul>
                 </details>
               </li>
+
+              <li>
+                <details>
+                  <summary className="font-medium">Aplicación</summary>
+                  <ul>
+                    <li>
+                      <a onClick={handleExitApp} className="text-error font-medium">{isClosingApp ? "Saliendo..." : "Salir de la aplicación"}</a>
+                    </li>
+                  </ul>
+                </details>
+              </li>
               
             </ul>
           </div>
 
         </div>
+
+        <button
+          type="button"
+          className="btn btn-circle btn-sm btn-outline btn-error absolute right-4 top-1/2 -translate-y-1/2"
+          title="Salir de la aplicación"
+          aria-label="Salir de la aplicación"
+          onClick={handleExitApp}
+          disabled={isClosingApp}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
 
       {/* Modal: Acerca del Sistema */}

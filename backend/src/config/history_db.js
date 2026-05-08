@@ -1,5 +1,6 @@
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
+import path from "path";
 
 let historyDbInstance = null;
 
@@ -15,8 +16,12 @@ async function ensureColumnExists(db, tableName, columnName, columnSql) {
 export async function initHistoryDB() {
     if (historyDbInstance) return historyDbInstance;
 
+    const historyDbPath = process.env.DB_DIR
+        ? path.resolve(process.env.DB_DIR, "history.sqlite")
+        : "./history.sqlite";
+
     const db = await open({
-        filename: "./history.sqlite",
+        filename: historyDbPath,
         driver: sqlite3.Database
     });
     // Activamos las Claves Foráneas para garantizar la consistencia del historial
@@ -124,7 +129,7 @@ export async function initHistoryDB() {
     //     WHERE fecha_registro IS NULL;
     // `);
 
-console.log("Base de datos histórica desplegada.");
+    console.log("Base de datos histórica desplegada.");
     historyDbInstance = db;
     return db;
 }

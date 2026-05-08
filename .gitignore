@@ -1,6 +1,11 @@
 node_modules
 .env
 
+# Node modules en subproyectos
+backend/node_modules/
+frontend/node_modules/
+solar-chain-hardhatv2/node_modules/
+
 # Hardhat files
 **/cache/
 **/artifacts/
@@ -31,9 +36,26 @@ solar-chain-hardhatv2/ignition/deployments/chain-1337
 # Archivos de Frontend
 
 /frontend/public
+/frontend/dist/
+
+# Runtime local
+.runtime-native/
 
 # Bases de datos SQLite
 backend/*.sqlite
+backend/data/
+
+# Binarios y paquetes pesados
+*.tar
+*.zip
+*.7z
+*.exe
 
 # ABI del backend
 backend/abis/*.json
+
+# Instalacion offline (no versionar)
+instalacion-solarchain/
+/*.cmd
+/*.ps1
+/*.vbs

@@ -1,27 +1,89 @@
-version: '3.8'
-
 services:
+  ganache:
+    image: trufflesuite/ganache:v7.9.1
+    container_name: solar-ganache
+    command:
+      - --server.host
+      - 0.0.0.0
+      - --server.port
+      - '8545'
+      - --chain.chainId
+      - '1337'
+      - --wallet.deterministic
+      - 'true'
+      - --database.dbPath
+      - /data
+      - --wallet.totalAccounts
+      - '20'
+      - --miner.defaultGasPrice
+      - '0'
+      - --miner.blockGasLimit
+      - '0x1fffffffffffff'
+      - --chain.allowUnlimitedContractSize
+      - 'true'
+    ports:
+      - "8545:8545"
+    volumes:
+      - solar_blockchain_db:/data
+    networks:
+      - solar_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8545',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'eth_chainId',params:[],id:1})}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  contract-deployer:
+    image: solarchain-contract-deployer:1.0.0
+    build:
+      context: .
+      dockerfile: solar-chain-hardhatv2/Dockerfile
+    container_name: solar-contract-deployer
+    depends_on:
+      - ganache
+    environment:
+      RPC_URL: http://ganache:8545
+      PRIVATE_KEY: 0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d
+    volumes:
+      # Solo monta la carpeta de deployments para persistir la dirección del contrato
+      - ./solar-chain-hardhatv2/ignition/deployments:/app/solar-chain-hardhatv2/ignition/deployments
+    networks:
+      - solar_network
+    restart: "no"
+
   # Backend API
   backend:
+    image: solarchain-backend:1.0.0
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: solar-backend
     ports:
-      - "3000:3000"
+      - "3001:3001"
+    depends_on:
+      ganache:
+        condition: service_healthy
+      contract-deployer:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
-      PORT: 3000
+      PORT: 3001
+      DB_DIR: /app/backend/data
+      RPC_URL: http://ganache:8545
+      CONTRACT_ADDRESS: ""
+      PRIVATE_KEY: 0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d
+      JWT_SECRET: SOLARCHAIN-2026-UNLAR-SECRET
     volumes:
       # Volumen persistente para la base de datos SQLite
-      - solar_db_data:/app/backend
-      # Volumen persistente para la BD de blockchain
-      - solar_blockchain_db:/app/backend/blockchain_db
+      - solar_db_data:/app/backend/data
+      - ./solar-chain-hardhatv2:/app/solar-chain-hardhatv2:ro
     networks:
       - solar_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/auth/status"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/auth/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -29,12 +91,13 @@ services:
 
   # Frontend Web UI
   frontend:
+    image: solarchain-frontend:1.0.0
     build:
       context: .
       dockerfile: frontend/Dockerfile
     container_name: solar-frontend
     ports:
-      - "80:80"
+      - "5173:80"
     depends_on:
       backend:
         condition: service_healthy

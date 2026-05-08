@@ -1,6 +1,7 @@
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import crypto from "crypto";
+import path from "path";
 
 let dbInstance = null;
 
@@ -212,8 +213,12 @@ async function normalizeLotesTable(db) {
 export async function initDB() {
     if (dbInstance) return dbInstance;
 
+    const dbPath = process.env.DB_DIR
+        ? path.resolve(process.env.DB_DIR, "produccion.sqlite")
+        : "./produccion.sqlite";
+
     const db = await open({
-        filename: "./produccion.sqlite",
+        filename: dbPath,
         driver: sqlite3.Database
     });
 

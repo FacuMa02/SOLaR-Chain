@@ -1,5 +1,5 @@
 # Frontend Dockerfile (Multi-stage build)
-FROM node:18-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app/frontend
 
@@ -9,17 +9,11 @@ COPY frontend/package*.json ./
 # Instalar dependencias
 RUN npm ci
 
-# Copiar código fuente y archivos de configuración
-COPY frontend/src ./src
-COPY frontend/public ./public
-COPY frontend/index.html ./
-COPY frontend/vite.config.js ./
-COPY frontend/tailwind.config.cjs ./
-COPY frontend/postcss.config.cjs ./
-COPY frontend/eslint.config.js ./
+# Copiar el resto del proyecto frontend
+COPY frontend/ ./
 
 # Compilar la aplicación
-ENV VITE_API_BASE=http://localhost:3000/api
+ENV VITE_API_BASE=http://localhost:3001/api
 RUN npm run build
 
 # Stage 2: Servir la aplicación compilada
