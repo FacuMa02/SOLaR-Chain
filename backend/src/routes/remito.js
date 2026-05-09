@@ -4,7 +4,7 @@ import { getDB } from "../config/database.js";
 
 const router = express.Router();
 
-const REMITO_UTC_OFFSET_HOURS = 3;
+const REMITO_UTC_OFFSET_HOURS = -3;
 
 function formatDateTimeAtUtcOffset(date, offsetHours) {
     const shifted = new Date(date.getTime() + offsetHours * 60 * 60 * 1000);
