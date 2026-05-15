@@ -405,6 +405,39 @@ router.post("/avanzar-etapa", async (req, res) => {
     try {
         const db = getDB();
 
+        // Validaciones de transiciones que requieren datos específicos
+        // Transición 3-4: Centrifugado → Decantado (requiere kg de aceite neto)
+        if (etapa === 4) {
+            if (!kgAceiteNeto || Number(kgAceiteNeto) <= 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: "La transición de Centrifugado a Decantado requiere una masa neta de aceite mayor a 0 kg." 
+                });
+            }
+        }
+
+        // Transición 5-6: Analisis → Almacenamiento (requiere kg, acidez y peroxidos)
+        if (etapa === 6) {
+            if (!kgAceiteNeto || Number(kgAceiteNeto) <= 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: "La transición a Almacenamiento requiere una masa neta final de aceite mayor a 0 kg." 
+                });
+            }
+            if (acidez === null || acidez === undefined || Number(acidez) < 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: "La transición a Almacenamiento requiere un índice de acidez válido (no negativo)." 
+                });
+            }
+            if (peroxidos === null || peroxidos === undefined || Number(peroxidos) < 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: "La transición a Almacenamiento requiere un índice de peróxidos válido (no negativo)." 
+                });
+            }
+        }
+
         // Validar que el kgAceiteNeto no sea mayor al peso del lote
         if (kgAceiteNeto) {
             const loteInfo = await db.get(`SELECT peso_kg FROM lotes WHERE blockchain_id = ?`, [idLoteBlockchain]);

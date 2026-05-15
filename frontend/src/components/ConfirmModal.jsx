@@ -30,17 +30,45 @@ export default function ConfirmModal({ open, title, subtitle, fromIndex, toIndex
   function handleConfirm() {
     if (!onConfirm) return;
     
-    const kg = Number(kgAceiteNeto) || 0;
+    const kg = Number(kgAceiteNeto);
+    const acid = Number(acidez);
+    const perox = Number(peroxidos);
+
+    // Validar campos requeridos para transiciones que necesitan datos
+    if (isKgAceite) {
+      if (!kgAceiteNeto || isNaN(kg) || kg <= 0) {
+        setErrorMsg("La masa neta de aceite es requerida y debe ser mayor a 0 kg.");
+        return;
+      }
+    }
+
+    if (isFullQuality) {
+      if (!kgAceiteNeto || isNaN(kg) || kg <= 0) {
+        setErrorMsg("La masa neta final de aceite es requerida y debe ser mayor a 0 kg.");
+        return;
+      }
+      if (!acidez || isNaN(acid) || acid < 0) {
+        setErrorMsg("El índice de acidez es requerido y no puede ser negativo.");
+        return;
+      }
+      if (!peroxidos || isNaN(perox) || perox < 0) {
+        setErrorMsg("El índice de peróxidos es requerido y no puede ser negativo.");
+        return;
+      }
+    }
+
+    // Validar que kgAceiteNeto no sea mayor que el peso total
     if ((isKgAceite || isFullQuality) && maxKg && kg > maxKg) {
       setErrorMsg(`La masa de aceite (${kg} kg) no puede ser mayor que el peso total del lote (${maxKg} kg).`);
       return;
     }
+
     setErrorMsg("");
 
     onConfirm({
       kgAceiteNeto: kg,
-      acidez: Number(acidez) || 0,
-      peroxidos: Number(peroxidos) || 0,
+      acidez: acid,
+      peroxidos: perox,
     });
   }
 
